@@ -1,5 +1,7 @@
 import pandas as pd
 import datetime as dt
+import config as c
+import data_op as op
 
 #####
 #Class to save the information regarding company stock values
@@ -7,19 +9,14 @@ import datetime as dt
 #####
 class Ticker:
 
-    #Class attributes
-    data_folder = 'Data/'
-    initial_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
-    quote_columns = initial_columns[1:-1]
-
     #####
-    #Reads the data from the excel file and
+    #Reads the data from the csv file and
     #Saves it in self.data
     #####
     def save_all_data(self):
 
-        data = pd.read_excel(self.filename)                              
-        data['Date'] = data['Date'].dt.date                          
+        data = pd.read_csv(self.filename)                              
+        data['Date'] = pd.to_datetime(data['Date']).dt.date                    
 
         return data
     
@@ -29,27 +26,25 @@ class Ticker:
     #If not specified, it returns the original data.
     #If a column is specified, only that one and Date columns are returned
     ##### 
-    def get_interval_data(self, column = None, start_date = None, end_date = None):
+    def get_interval_data(self, column = None, start_date = None, end_date = None, date = True):
         
         #Get original data with all or one column
         if column == None:
             data = self.data
-        elif column in self.quote_columns:
+        elif column in op.quote_columns:
             data = self.data[['Date', column]]  
         else:
             print('Column not available')
 
         #If any start date was specified, remove any data before that 
-        if start_date is not None:
-            start_date_time = dt.datetime.strptime(start_date, "%Y-%m-%d").date()
-            data = data.loc[data['Date'] >= start_date_time]
-
-        #If any start date was specified, remove any data after that 
-        if end_date is not None:
-            end_date_time = dt.datetime.strptime(end_date, "%Y-%m-%d").date()
-            data = data.loc[data['Date'] <= end_date_time]
+        data = op.df_start_to_end_date(data, start_date = start_date, end_date = end_date)
         
+        if not date: 
+            data.drop(columns = ['Date'], inplace = True)
+
+        self.selected_data = data
         return data
+    
 
     #####
     #Returns the stock return between start_date and end_date
@@ -60,17 +55,17 @@ class Ticker:
     def stock_return(self, column = 'Close', start_date = None, end_date = None):
 
         #In case of an invalid column
-        if column not in Ticker.quote_columns:
+        if column not in op.quote_columns:
             print ('Variable column is not valid')
             return
 
         #Gets the data on which to calculate the return
-        data = self.get_interval_data(start_date, end_date)
+        data = self.get_interval_data(column = None, start_date = start_date, end_date = end_date)
 
         #If there is no data, return
         if data.empty:
             print('There is no data between these two dates. They might have been assigned in the wrong order.')
-            return
+            return 0
 
         #Get first and last value and calculate the return with it
         first_value = data.iloc[0][column]
@@ -79,14 +74,16 @@ class Ticker:
 
         return stock_return
 
-    
+
 
     def __init__(self, ticker_name):
 
         #Initializes ticker parameters
         self.ticker_name = ticker_name
-        self.filename = self.data_folder + 'Historical Data/' + self.ticker_name + '.xlsx'
+        self.filename = c.hist_folder + self.ticker_name + c.filetype
         self.data = self.save_all_data()
+        self.selected_data = self.data.copy()
         self.first_day = self.data.iloc[0]['Date']
         self.last_day = self.data.iloc[-1]['Date']
+        self.total_days = len(self.data)
     

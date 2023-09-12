@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+import config as c
+import datetime as dt
+
 
 
 data_folder = 'Data/'
@@ -17,31 +20,41 @@ def get_sp500_tickers():
 
     return tickers
 
+def date_str_to_dt(date):
 
-
-#####
-#Returns a dataframe with the requested data.
-#If column is None, return full dataframe;
-#If column is a quote column, return it with the Data;
-#Else, print error and return
-#####
-def get_ticker(tic, column = None):
-
-    filename = data_folder + 'Historical Data/' + tic + '.xlsx'         
-    data = pd.read_excel(filename)                                      #Get the ticker's filename and read excel
-    data['Date'] = data['Date'].dt.date                                 #Date column from 
-
-    if column == None:                                                  #If nothing is specified, return whole dataframe
-        return data
+    #print('converting string to datetime.date')
+    if date is None:
+        return_date = date
+    else:
+        try:
+            dt.datetime.strptime(date, '%Y-%m-%d')
+            return_date = date
+        except ValueError:
+            return_date = None
     
-    elif column in quote_columns:                                       #If the column value is correctly specified, 
-        return data[['Date', column]]                                   #Return it with date column
+    return return_date
+
+def df_start_to_end_date(data, start_date = None, end_date = None):
+
+    new_data = data.copy()
+    if start_date is not None:
+        start_date_time = dt.datetime.strptime(start_date, "%Y-%m-%d").date()
+        new_data = new_data.loc[data['Date'] >= start_date_time]
+
+    #If any start date was specified, remove any data after that 
+    if end_date is not None:
+        end_date_time = dt.datetime.strptime(end_date, "%Y-%m-%d").date()
+        new_data = new_data.loc[data['Date'] <= end_date_time]
+
+    return new_data
+
+def check_valid_dates(data, start_date = None, end_date = None):
     
-    else:                                                               #If incorrectly specified, print error and return 
-        print('Column name not available')
-        return
-
-
+    data = df_start_to_end_date(data, start_date = start_date, end_date = end_date)
+    if data.empty:
+        return False
+    else:
+        return True
 
 #####
 #Remove all columns from the ticker's dataframe except the ones from the initial quotes dataframe
@@ -60,6 +73,7 @@ def whole_df_to_quotes(df):
 #Get quote information from various tickers in the same dataframe.
 #The 'column' variable decides which original column to use, and the
 #'how_merge' decides how to merge, either outer or inner 
+#Can be done by just creating a Portfolio
 #####
 def get_various_tickers (tickers, column = 'Close', how_merge = 'outer'):
 
@@ -74,8 +88,8 @@ def get_various_tickers (tickers, column = 'Close', how_merge = 'outer'):
         return
         
     for tic in tickers:                                                         #For loop that passes all tickers
-        to_save_filename = data_folder + 'Historical Data/' + tic + '.xlsx'
-        data = pd.read_excel(to_save_filename)
+        to_save_filename = data_folder + 'Historical Data/' + tic + c.filetype
+        data = pd.read_csv(to_save_filename)
         data['Date'] = data['Date'].dt.date
 
         if tic == tickers[0]:                                                   #If it's the first ticker
@@ -96,8 +110,8 @@ def get_various_tickers (tickers, column = 'Close', how_merge = 'outer'):
 def same_df_tickers (sel_tickers):
 
     for tic in sel_tickers:
-        to_save_filename = 'Data/Historical Data/' + tic + '.xlsx'
-        data = pd.read_excel(to_save_filename)
+        to_save_filename = 'Data/Historical Data/' + tic + c.filetype
+        data = pd.read_csv(to_save_filename)
         if tic == sel_tickers[0]:
             hist_df = data[['Date', 'Close']].copy()
             hist_df.rename(columns={"Close": tic}, inplace = True)
@@ -108,11 +122,16 @@ def same_df_tickers (sel_tickers):
     return hist_df
 
 
+#####
+#Concatenates tickers in the same dataframe for 
+#####
+#def str_to_date (ticker):
+
 
 def get_fa(tic):
 
-    filename = data_folder + 'FA/' + tic + '.xlsx'
-    data = pd.read_excel(filename)
+    filename = data_folder + 'FA/' + tic + c.filetype
+    data = pd.read_csv(filename)
     data['Date'] = data['Date'].dt.date
     return data
 

@@ -1,5 +1,7 @@
 from ticker import Ticker
 import data_op as op
+import config as c
+
  
 
 #####

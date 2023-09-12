@@ -5,16 +5,24 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 import os
-import data_op
+import data_op as op
 import calendar
 import ticker
 import time
+import config as c
+import logging
 
 
 from datetime import datetime, date
 from urllib.request import Request, urlopen
 
-data_folder = 'Data/'
+'''log_level = logging.getLevelName(c.logging_level)
+logger = logging.getLogger(__name__)
+logger.setLevel(log_level)
+formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(message)s')
+file_handler = logging.FileHandler('download_data.log')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)'''
 
 
 #####
@@ -44,7 +52,7 @@ def update_sp500_tickers():
 #####
 def data_index_to_date(data):
 
-        data.index = data.index.tz_localize(None)           #Remove timezone from index
+        #data.index = data.index.tz_localize(None)           #Remove timezone from index
         data.reset_index(inplace = True)                    #Reset index to number of rows
         data['Date'] = data['Date'].dt.date                 #Convert 'Date' column from pandas datetime to datetime.date
         
@@ -59,40 +67,42 @@ def data_index_to_date(data):
 def update_historical_data(tickers = None):
 
     if tickers is None:                                                     #If no list of tickers is specified
-        tickers = data_op.get_sp500_tickers()                               #Gets list of all S&P500 tickers
+        tickers = op.get_sp500_tickers()                               #Gets list of all S&P500 tickers
     i = 0
     for tic in tickers:
-        to_save_filename = data_folder + 'Historical Data/' + tic + '.xlsx'         #Path for ticker file
-        print('The next ticker is:', tic)
+        to_save_filename = c.hist_folder + tic + c.filetype        #Path for ticker file
+        logger.info('The next ticker is: %s', tic)
 
         if os.path.exists(to_save_filename):                                        #If the file exists
 
-            data = pd.read_excel(to_save_filename)                                  #Obtain dataframe from file
+            data = pd.read_csv(to_save_filename)                                  #Obtain dataframe from file
             date_today = dt.date.today()                                            #Gets today's date
-            last_date = data.iloc[-1]['Date']                                       #Gets last date from excel file
+            last_date = datetime.strptime(
+                data.iloc[-1]['Date']
+                , "%Y-%m-%d").date()
             last_date += dt.timedelta(days=1)                                       #Increments 1 day
-            last_date = last_date.to_pydatetime().date()
 
             if last_date < date_today:                                                                  #If today's date is after last
-                print('Ticker ', tic, ' will be updated.')                                              #date in file, then update file
+                logger.info('Ticker %s will be updated.', tic)                                              #date in file, then update file
                 new_data = yf.download(tic, start = last_date, end = date_today, interval = '1d')       #Download new data
 
                 if len(new_data) > 0:                                               #If downloaded data is not null
-                    new_data.index = new_data.index.tz_localize(None)
-                    new_data.reset_index(inplace = True)
+                    new_data = data_index_to_date(new_data)
                     new_df = pd.concat([data, new_data])                            #Concatenate both dataframes
                     new_df.reset_index(inplace = True, drop = True)
-                    new_df['Date'] = new_df['Date'].dt.date
-                    new_df.to_excel(to_save_filename, index = False)                #Save to excel
+                    new_df.to_csv(to_save_filename, index = False)                #Save to csv
             else:
-                print('No update available for', tic)                               #If there is no update for this ticker
+                logger.info('No update available for %s.', tic)                               #If there is no update for this ticker
 
-        else:                                                               #In case the file does not exists
+        else:   
+            start = time.time()                                                            #In case the file does not exists
             data = yf.download(tic, period = 'max', interval = '1d')        #Download data from yfinance
             data = data_index_to_date(data)                                 
             data = data.iloc[:-1]                                           #Remove last row - may not be a complete day     
-            data.to_excel(to_save_filename, index = False)                  #Save to excel
-        print(i)
+            data.to_csv(to_save_filename, index = False)                  #Save to csv
+            end = time.time()
+            logger.debug(end - start)
+        logger.debug(i)
         i +=1
 
 
@@ -122,7 +132,7 @@ def download_dividends(tic):
 
 def update_dividends(tic):
 
-    to_save_filename = data_folder + 'Historical Data/' + tic + '.xlsx'
+    to_save_filename = c.hist_folder + tic + c.filetype
 
     if not os.path.exists(to_save_filename):
         update_historical_data(tic)
@@ -139,23 +149,23 @@ print(asd)
 
 def update_financials():
 
-    tickers = data_op.get_sp500_tickers()
+    tickers = op.get_sp500_tickers()
 
     for tic in tickers:
 
-        to_save_filename = data_folder + 'Historical Data/' + tic + '.xlsx'
+        to_save_filename = c.hist_folder + tic + c.filetype
         financials_df = yf.Ticker(tic).financials.transpose()
         financials_df.reset_index(drop = False, inplace = True)
         financials_df.rename(columns={"index": "Date"})
         financials_df['Date'] = financials_df['Date'].dt.date
         if os.path.exists(to_save_filename):
-            data = pd.read_excel(to_save_filename)
+            data = pd.read_csv(to_save_filename)
             data.merge(financials_df, )
 
 
 '''
 tic = 'AAL'
-to_save_filename = data_folder + 'Historical Data/' + tic + '.xlsx'
+to_save_filename = c.hist_folder + tic + c.filetype
 financials_df = yf.Ticker(tic).financials.transpose()
 financials_df.index = financials_df.index.tz_localize(None)
 financials_df.reset_index(inplace = True)
@@ -166,13 +176,13 @@ fcolumns = financials_df.columns[1:]
 
 
 if os.path.exists(to_save_filename):
-    data = pd.read_excel(to_save_filename)
+    data = pd.read_csv(to_save_filename)
     data['Date'] = data['Date'].dt.date
     if financials_df.columns[1] not in data.columns:
         data = data.merge(financials_df, on = 'Date', how = 'outer')
         data.sort_values(by = 'Date', inplace = True)
         data.reset_index(inplace = True, drop = True)
-        data.to_excel(to_save_filename, index = False)
+        data.to_csv(to_save_filename, index = False)
     else:
         dates = financials_df['Date']
         for i in dates:

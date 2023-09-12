@@ -19,56 +19,70 @@ from deap import tools
 
 sp500 = SP500()
 
-'''log_level = logging.getLevelName(c.logging_level)
-logger = logging.getLogger(__name__)
-logger.setLevel(log_level)
-formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(message)s')
-file_handler = logging.FileHandler('stock_selection.log')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)'''
-
 logging.basicConfig(level=logging.ERROR,
                     format='%(asctime)s: %(levelname)s: %(message)s'
                     )
-
 
 PRTF_SIZE = 10
 IND_SIZE = 10
 START_DATE = '2022-10-01'
 END_DATE = '2023-08-01'
 CXPB, MUTPB = 0.5, 0.3
-pop_size = 50
-generations = 100
+pop_size = 20
+generations = 50
+prtf_tickers = ['BG', 'FTNT', 'WRB', 'NTAP', 'FTRE', 'CSX', 'LVS', 'EMR', 'EL', 'WDC']
 
-def initPortfolio(sp500 = sp500, nmbr_stocks = 10, tickers = None):
+def initPortfolio(sp500 = sp500, nmbr_stocks = 10, tickers = None, weights = None):
 
-    if tickers is None:
-        tickers = random.sample(sp500.tickers_list, nmbr_stocks)
     prtf = creator.Individual(sp500, 
                               cardinality_constraint=nmbr_stocks,
                               start_date = START_DATE, 
                               end_date = END_DATE)
     prtf.prtf_dict = tickers
-    prtf.apply_same_weights()
+    ticker_weights = [random.random() for _ in range(10)]
+    prtf.ticker_weights = ticker_weights
+    prtf.normalize_ticker_weights()
     if not op.check_valid_dates(prtf.prtf_df, START_DATE, END_DATE):
         prtf = initPortfolio()
     return prtf
 
-def mate_prtfs(ind1, ind2):
-    tic1 = random.sample(ind1.tickers_list, 1)[0]
-    tic2 = random.sample(ind2.tickers_list, 1)[0]
+def get_swap_numbers(lenght):
 
-    ind1.substitute_tickers(tic1, tic2)
-    ind2.substitute_tickers(tic2, tic1)
+    nmbr1 = random.randint(0, lenght)
+    nmbr2 = random.randint(0, lenght)
+
+    if nmbr1 >= nmbr2:
+        nmbr1, nmbr2 = get_swap_numbers(lenght)
+
+    return nmbr1, nmbr2
+
+def mate_prtfs(ind1, ind2):
+
+    length = len(ind1.ticker_weights)
+    nmbr1, nmbr2 = get_swap_numbers(length)
+
+    weights1 = ind1.ticker_weights
+    weights2 = ind2.ticker_weights
+
+    swap1 = weights1[nmbr1:nmbr2]
+    swap2 = weights2[nmbr1:nmbr2]
+    weights1[nmbr1:nmbr2] = swap2
+    weights2[nmbr1:nmbr2] = swap1
+
+    ind1.ticker_weights = weights1
+    ind2.ticker_weights = weights2
 
     return ind1, ind2
 
 def mutate_prtf(ind):
 
-    tic_to_insert = random.sample(ind.sp500.tickers_list, 1)[0]
-    tic_to_remove = random.sample(ind.tickers_list, 1)[0]
+    tic1 = random.sample(ind.tickers_list, 1)[0]
+    tic2 = random.sample(ind.tickers_list, 1)[0]
+    tic1_weight = ind.prtf_dict[tic1]['weight']
+    tic2_weight = ind.prtf_dict[tic2]['weight']
 
-    ind.substitute_tickers(tic_to_remove, tic_to_insert)
+    ind.change_ticker_weight(tic1, tic2_weight)
+    ind.change_ticker_weight(tic2, tic1_weight)
 
     return ind
 
@@ -93,7 +107,7 @@ t.register("evaluate", evaluate_prtf)
 t.register("select", tools.selNSGA2)
 t.register("selBest", tools.selBest)
 
-pop = t.population(n=pop_size)
+pop = [initPortfolio(tickers = prtf_tickers) for _ in range(pop_size)]
 list(map(t.evaluate, pop))
 
 # Extracting all the fitnesses of
@@ -113,9 +127,8 @@ while g < generations:
     offspring = t.select(pop, len(pop))
 
     # Clone the selected individuals
-    pop_tickers = [i.tickers_list for i in offspring]
-    offspring = list(initPortfolio(tickers = i) for i in pop_tickers)
-    #offspring = list(map(t.clone, offspring))
+    pop_weights = [i.ticker_weights for i in offspring]
+    offspring = list(initPortfolio(tickers = prtf_tickers, weights = i) for i in pop_weights)
 
     # Apply crossover and mutation on the offspring
     a = 0
