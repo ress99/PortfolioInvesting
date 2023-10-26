@@ -1,5 +1,10 @@
 
 filetype = '.csv'
 logging_level = 'ERROR'
-data_folder = 'Data/'
-hist_folder = data_folder + 'Historical Data/'
+data_folder = 'Data'
+hist_folder = 'Historical'
+financial_folder = 'Financial'
+prtf_folder = 'Portfolios'
+as_folder = 'Asset_Selection'
+po_folder = 'Portfolio_Optimization'
+assets_folder = 'Assets'

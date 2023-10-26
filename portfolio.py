@@ -1,25 +1,25 @@
-from sp500 import SP500
 import numpy as np
 import pandas as pd
-from ticker import Ticker
 import time
 import config as c
 import logging
 import data_op as op
 import datetime as dt
+import json
+import os
 
 class Portfolio:
 
     #####
     #Normalizes the weights of all portfolio tickets
     #####
-    def normalize_ticker_weights(self):
+    def normalize_asset_weights(self):
 
         logging.info('Normalizing the weights of the Portfolio.')
-        weight_sum = sum(self.ticker_weights)
+        weight_sum = sum(self.asset_weights)
         logging.debug('The sum of the weights is %f', weight_sum)
-        self.ticker_weights = [x / weight_sum for x in self.ticker_weights]
-        self.ticker_weights = np.asarray(self.ticker_weights)
+        self.asset_weights = [x / weight_sum for x in self.asset_weights]
+        self.asset_weights = np.asarray(self.asset_weights)
         logging.info('Portfolio weights normalized.')
 
         return
@@ -30,13 +30,13 @@ class Portfolio:
     def check_positivity(self):
 
         logging.info('Checking positivity of all weights of the Portfolio.')
-        for tic_name in self.tickers_list:
-            weight = self.prtf_dict[tic_name]['weight']
-            logging.debug('Ticker %s has weight %f.', tic_name, weight)
+        for asset_name in self:
+            weight = self[asset_name]['weight']
+            logging.debug('Asset %s has weight %f.', asset_name, weight)
             if weight < 0:
-                logging.info('There are tickers with negative weights.')
+                logging.info('There are assets with negative weights.')
                 return False
-        logging.info('All tickers have positive weight.')
+        logging.info('All assets have positive weight.')
         return True 
 
     #####
@@ -45,147 +45,206 @@ class Portfolio:
         
         logging.info('Applying positivity to the Portfolio weights.')
         if not self.check_positivity():
-            for tic_name in self.tickers_list:
-                weight = self.prtf_dict[tic_name]['weight']
+            for asset_name in self:
+                weight = self[asset_name]['weight']
                 if weight < 0:
                     if remove:
-                        logging.debug('Removing ticker %s with weight %d', tic_name, weight)
-                        self.prtf_dict = [tic_name]
+                        logging.debug('Removing asset %s with weight %d', asset_name, weight)
+                        self.prtf_dict = [asset_name]
                     else:
-                        new_value = np.array([positive_value for positive_value in self.ticker_weights if positive_value > 0]).mean()
-                        self.change_ticker_weight(tic_name, new_value)
+                        new_value = np.array([positive_value for positive_value in self.asset_weights if positive_value > 0]).mean()
+                        self.change_asset_weight(asset_name, new_value)
         if normalize:
-            self.normalize_ticker_weights()
+            self.normalize_asset_weights()
 
 
-    def change_ticker_weight(self, tic_name, value):
-        tic_name = tic_name.upper()
-        logging.info('Changing weight of ticker %s to %f', tic_name, value)
-        self._prtf_dict[tic_name]['weight'] = value
+    def change_asset_weight(self, asset_name, value):
+        asset_name = asset_name.upper()
+        logging.info('Changing weight of ticker %s to %f', asset_name, value)
+        self._prtf_dict[asset_name]['weight'] = value
 
 
-    def get_ticker_object(self, ticker_name):
+    def get_asset_object(self, asset_name):
 
-        ticker_name = ticker_name.upper()
-        if ticker_name in self.tickers_list:
-            return self.prtf_dict[ticker_name]['ticker']
+        asset_name = asset_name.upper()
+        if asset_name in self:
+            return self[asset_name]['object']
         else:
-            logging.warning('The ticker %s is not in the Portfolio.', ticker_name)
+            logging.warning('The asset %s is not in the Portfolio.', asset_name)
             return
 
-    def get_tickers_same_df(self, column = 'Close', start_date = None, end_date = None):
+    def get_assets_same_df(self, column = 'Close', start_date = None, end_date = None):
 
-        lengths_list = [len(self.get_ticker_object(tic).data) for tic in self.tickers_list]
-        max_length_index = lengths_list.index(max(lengths_list))
-        max_lenght_tic = self.tickers_list[max_length_index]
-        logging.debug('The ticker longest dataframe is the one of %s, with %d days.', max_lenght_tic, max(lengths_list))
+        lengths_list = [len(self.get_asset_object(asset).data) for asset in self]
+        longest_index = lengths_list.index(max(lengths_list))
+        longest_asset = self.asset_list[longest_index]
+        logging.debug('The longest asset is %s, with %d days.', longest_asset, max(lengths_list))
 
-        data = self.get_ticker_object(max_lenght_tic).data
-        same_df_tickers = data['Date'].copy()
-        same_df_tickers = same_df_tickers.to_frame()
+        data = self.get_asset_object(longest_asset).data
+        df = data['Date'].copy()
+        df = df.to_frame()
 
-        for tic in self.tickers_list:                                                         #For loop that passes all tickers
+        for asset in self:                                                         #For loop that passes all tickers
             
-            logging.debug('Adding %s to the dataframe', tic)
-            data = self.get_ticker_object(tic).data                                                                 #For following tickers
-            same_df_tickers = same_df_tickers.merge(data[['Date', column]], on = 'Date', how = self.how_merge)       #Merge dataframes with outer or inner
-            same_df_tickers.rename(columns={column: tic}, inplace = True)
+            logging.debug('Adding %s to the dataframe', asset)
+            data = self.get_asset_object(asset).data                                                                 #For following tickers
+            df = df.merge(data[['Date', column]], on = 'Date', how = self.merge_option)       #Merge dataframes with outer or inner
+            df.rename(columns={column: asset}, inplace = True)
         
-        logging.info('All the %d tickers added to the same dataframe with %s merge.', len(self.tickers_list), self.how_merge)
+        logging.info('All the %d assets added to the same dataframe with %s merge.', len(self), self.merge_option)
 
-        same_df_tickers = op.df_start_to_end_date(same_df_tickers, start_date = start_date, end_date = end_date)
+        df = op.df_start_to_end_date(df, start_date = start_date, end_date = end_date)
+        #df.set_index('Date', inplace=True)
 
-        return same_df_tickers
+        return df
 
-    def add_ticker_to_dict(self, tic_name):
+    def get_asset_index(self, asset):
 
-        logging.info('Adding %s to Portfolio.', tic_name)
+        if asset not in self.all_assets:
+            logging.warning(('Asset %s not present in any of the indexes', asset))
+            return
+        
+        for i in self.indexes.values():
+            if asset in i:
+                return i
+        
 
-        if tic_name in self.sp500.sp500_dict:
-            if tic_name not in self.tickers_list:
-                self.prtf_dict = [tic_name]
+    def add(self, asset):
+
+        logging.info('Adding %s to Portfolio.', asset)
+
+        if asset in self.all_assets:
+            if asset not in self:
+                self.prtf_dict = [asset]
             else:
-                logging.warning('Ticker %s is already in the Portfolio.', tic_name)                
+                logging.warning('Asset %s is already in the Portfolio.', asset)                
         else:
-            logging.warning('Ticker %s does not exist in the S&P500.', tic_name)
+            logging.warning('Asset %s does not exist.', asset)
     
         return
 
-    def remove_ticker_from_dict(self, tic_name):
+    def remove(self, asset):
 
-        logging.info('Removing %s to Portfolio.', tic_name)
+        logging.info('Removing %s from Portfolio.', asset)
 
-        if tic_name in self.sp500.sp500_dict:
-            if tic_name in self.tickers_list:
-                self.prtf_dict = [tic_name]
+        if asset in self.all_assets:
+            if asset in self:
+                self.prtf_dict = [asset]
             else:
-                logging.warning('Ticker %s is not in the Portfolio.', tic_name)                
+                logging.warning('Asset %s is not in the Portfolio.', asset)                
         else:
-            logging.warning('Ticker %s does not exist in the S&P500.', tic_name)
+            logging.warning('Asset %s does not exist.', asset)
     
         return
     
-    def substitute_tickers(self, out_ticker, in_ticker):
+    def substitute_assets(self, out_asset, in_asset):
 
-        out_ticker, in_ticker = out_ticker.upper(), in_ticker.upper()
+        out_asset, in_asset = out_asset.upper(), in_asset.upper()
 
-        if out_ticker not in self.tickers_list:
-            logging.warning('Ticker %s does not exist in the Portfolio.', out_ticker)
-        elif in_ticker in self.tickers_list:
-            logging.warning('Ticker %s already exists in the Portfolio.', in_ticker)
-        elif in_ticker not in self.sp500.tickers_list:
-            logging.warning('Ticker %s does not exist.', in_ticker)
+        if out_asset not in self.asset_list:
+            logging.warning('Asset %s does not exist in the Portfolio.', out_asset)
+        elif in_asset in self.asset_list:
+            logging.warning('Asset %s already exists in the Portfolio.', in_asset)
+        elif in_asset not in self.all_assets:
+            logging.warning('Asset %s does not exist.', in_asset)
             
         else:
-            weight = self.prtf_dict[out_ticker]['weight']
-            self.prtf_dict = [out_ticker, in_ticker]
-            self.change_ticker_weight(in_ticker, weight)
-            logging.info('Substituted %s for %s.', out_ticker, in_ticker)        
+            weight = self.prtf_dict[out_asset]['weight']
+            self.prtf_dict = [out_asset, in_asset]
+            self.change_asset_weight(in_asset, weight)
+            logging.info('Substituted %s for %s.', out_asset, in_asset)        
 
 
+    def get_index(self, asset):
 
-    def __init__(self, sp500, cardinality_constraint, column = 'Close', start_date = None, end_date = None, merge_option = 'inner'):
+        for i in self.indexes:
+            if asset in self.indexes[i]:
+                return self.indexes[i]
+        return None
+
+
+    def __init__(self, indexes, cardinality_constraint = None, column = 'Close', start_date = None, end_date = None, merge_option = 'inner', filename = None):
 
         logging.info('Initializing Portfolio object with %d stocks.', cardinality_constraint)
 
         self._prtf_dict = dict()
-        self.sp500 = sp500
-        self.cardinality_constraint = cardinality_constraint
-        self.start_date = start_date
-        self.end_date = end_date
-        #TODO mudar data quando for inner
-        self.merge_option = merge_option
-        self.column = column
+        self.indexes = indexes
+
+        if filename is not None:
+            self.init_from_file(filename)
+        
+        else:
+            self.cardinality_constraint = cardinality_constraint
+            self.start_date = start_date
+            self.end_date = end_date
+            #TODO mudar data quando for inner
+            self.merge_option = merge_option
+            self.column = column
+
+    def __len__(self):
+        return len(self._prtf_dict)
+
+    def __getitem__(self, i):
+        return self._prtf_dict[i]
+    
+    def __iter__(self):
+        return iter(self._prtf_dict)
+    
+    def __str__(self):
+        return str(self._prtf_dict)
+    
+    '''def __setitem__(self, key, value):
+        ticker_dict = {'object': key, 'weight': value}
+        self._prtf_dict[key] = ticker_dict'''
+
+    def __delitem__(self, key):
+        del self._prtf_dict[key]
 
     @property
     def prtf_dict(self):
         return self._prtf_dict
 
     @prtf_dict.setter
-    def prtf_dict(self, ticker_name):
+    def prtf_dict(self, asset_name):
 
-        for tic in ticker_name:
-            tic = tic.upper()
+        for asset in asset_name:
+            asset = asset.upper()
 
-            if tic in self.tickers_list:                            #If it's already in the portfolio
-                del self._prtf_dict[tic]
-                logging.info('Ticker %s removed from Portfolio', tic)
+            if asset in self:                            #If it's already in the portfolio
+                del self._prtf_dict[asset]
+                logging.info('Asset %s removed from Portfolio', asset)
             
-            elif tic in self.sp500.tickers_list:                                        #If it exists in the sp500
-                if self.sp500.sp500_dict[tic] is None:                                  #If not saved in the sp500 class
-                    self.sp500.get_ticker(tic)                                          #Save it
+            elif asset in self.all_assets:                                        #If it exists in the sp500
+                index = self.get_asset_index(asset)
+                if index[asset] is None:                                  #If not saved in the sp500 class
+                    index.get_asset(asset)                                          #Save it
                 ticker_dict = dict()                                                    #Create new dictionary and save it under tic key
-                ticker_dict = {'ticker': self.sp500.sp500_dict[tic], 'weight': -1}
-                self._prtf_dict[tic] = ticker_dict
-                logging.info('Ticker %s added to Portfolio', tic)
+                ticker_dict = {'object': index[asset], 'weight': -1}
+                self._prtf_dict[asset] = ticker_dict
+                logging.info('Asset %s added to Portfolio', asset)
             
             else:
-                logging.warning('Ticker %s does not exist in the S&P500', tic)
+                logging.warning('Asset %s does not exist in the S&P500', asset)
 
         return
 
     @property
-    def tickers_list(self):
+    def indexes(self):
+        return self._indexes
+    
+    @indexes.setter
+    def indexes(self, idxs):
+        self._indexes = {i.name: i for i in idxs}
+
+    @property
+    def all_assets(self):
+        assets = []
+        aux_list = [list(i) for i in self.indexes.values()]
+        [assets.extend(i) for i in aux_list]
+        return assets
+
+    @property
+    def asset_list(self):
         return list(self.prtf_dict.keys())
 
     @property
@@ -193,47 +252,28 @@ class Portfolio:
         return len(self.prtf_dict)
 
     @property
-    def ticker_weights(self):
+    def asset_weights(self):
         weights_list = []
         for ticker in self.prtf_dict:
             weight = self.prtf_dict[ticker]['weight']
             weights_list.append(weight)
         return weights_list
 
-    @ticker_weights.setter
-    def ticker_weights(self, new_weights):
+    @asset_weights.setter
+    def asset_weights(self, new_weights):
         logging.info('Getting new ticker weights.')
         if len(new_weights) == self.nmbr_stocks:
-            for idx, tic in enumerate(self.tickers_list):
-                self.change_ticker_weight(tic, new_weights[idx])
+            for idx, tic in enumerate(self.asset_list):
+                self.change_asset_weight(tic, new_weights[idx])
         else:
             logging.warning('The new weights do not match the number of stocks in the Portfolio.')
 
     @property
     def prtf_df(self):
         
-        lengths_list = [self.get_ticker_object(tic).total_days for tic in self.tickers_list]
-        max_length_index = lengths_list.index(max(lengths_list))
-        max_lenght_ticker = self.tickers_list[max_length_index]
-        logging.debug('The longest dataframe is the one of %s, with %d days.', max_lenght_ticker, max(lengths_list))
-
-        data = self.get_ticker_object(max_lenght_ticker).data
-        same_df_tickers = data['Date'].copy()
-        same_df_tickers = same_df_tickers.to_frame()
-
-        for tic in self.tickers_list:                                                         #For loop that passes all tickers
-            
-            logging.debug('Adding %s to the dataframe', tic)
-            data = self.get_ticker_object(tic).data                                                                 #For following tickers
-            same_df_tickers = same_df_tickers.merge(data[['Date', self.column]], on = 'Date', how = self.merge_option)       #Merge dataframes with outer or inner
-            same_df_tickers.rename(columns={self.column: tic}, inplace = True)
-        
-        logging.info('All the %d tickers added to the same dataframe with %s merge.', len(self.tickers_list), self.merge_option)
-
-        same_df_tickers = op.df_start_to_end_date(same_df_tickers, start_date = self.start_date, end_date = self.end_date)
-
-        return same_df_tickers
-
+        return self.get_assets_same_df(column = 'Close', 
+                                       start_date = self.start_date, 
+                                       end_date=self.end_date)
     @property
     def column(self):
         return self._column
@@ -284,10 +324,53 @@ class Portfolio:
         self._end_date = op.date_str_to_dt(date)
         logging.info('End date set as %s', self._end_date)
     
+    def prtf_to_dict(self):
+
+        return_dict = {'asset_list': self.asset_list,
+                       'asset_weights': self.asset_weights,
+                       'indexes': list(self.indexes.keys()), 
+                       'cardinality_constraint': self.cardinality_constraint,
+                       'start_date': self.start_date, 
+                       'end_date': self.end_date,
+                       'merge_option': self.merge_option,
+                       'column': self.column}
+        
+        return return_dict
+
+    def write_json(self, name = None):
+
+        if name is None:
+            now = dt.datetime.now()
+            name = now.strftime("%Y-%m-%d_%H-%M")
+
+        write_dict = self.prtf_to_dict()
+        
+        with open(os.path.join(c.prtf_folder, name + '.json'), 'w') as file:
+            json.dump(write_dict, file)
+
+    def init_from_file(self, filename = None):
+
+        with open(os.path.join(c.prtf_folder, filename), 'r') as file:
+            content = json.load(file)
+        
+        self.prtf_dict = content['asset_list']
+        self.asset_weights = content['asset_weights']
+        self.cardinality_constraint = content['cardinality_constraint']
+        self.start_date = content['start_date']
+        self.end_date = content['end_date']
+        self.merge_option = content['merge_option']
+        self.column = content['column']
+
+        return
+
+
     ###Constraints
     def checks_cardinality(self):
         
         logging.info('Checking cardinality.')
+        if self.cardinality_constraint is None:
+            logging.info('The Portfolio checks the cardinality constraint.')
+            return True
         if self.nmbr_stocks > self.cardinality_constraint:
             logging.warning('There are %d stocks in the Portfolio, instead of the maximum of %d', self.nmbr_stocks, self.cardinality_constraint)
             return False
@@ -299,34 +382,47 @@ class Portfolio:
 
         logging.info('Applying cardinality constraint.')
         while not self.checks_cardinality():
-            array_ticker_weights = np.array(self.ticker_weights)
-            idx = np.argmin(array_ticker_weights)
-            del self.prtf_dict[self.tickers_list[idx]]
+            array_asset_weights = np.array(self.asset_weights)
+            idx = np.argmin(array_asset_weights)
+            del self.prtf_dict[self.asset_list[idx]]
 
     def apply_same_weights(self):
 
         logging.info('Applying same weights to the Portfolio.')
         new_weights = [1/self.nmbr_stocks] * self.nmbr_stocks
         logging.debug('The new weights are %s', str(new_weights))
-        self.ticker_weights = new_weights
+        self.asset_weights = new_weights
     
     def portfolio_return(self):
         
-        logging.info('Calculating the Portfolio return from %s to %s.', self.start_date, self.end_date)
-        self.apply_cardinality()
-        self.apply_positivity()     
-        total = 0   
-        for idx, ticker_name in enumerate(self.tickers_list):
-            ticker_object = self.get_ticker_object(ticker_name)
-            stock_return = ticker_object.stock_return(column = self.column, start_date = self.start_date, end_date = self.end_date)
-            total += stock_return * self.ticker_weights[idx]
-        
-        logging.info('The Portfolio return is %f', total)
-        return total
+        logging.info('Calculating the Portfolio return from %s to %s.', 
+                     self.prtf_df['Date'].iloc[0], 
+                     self.prtf_df['Date'].iloc[-1])
+
+        cumulative_returns = (self.prtf_df[self].pct_change() + 1).cumprod() - 1
+        prtf_return = np.dot(cumulative_returns.iloc[-1], self.asset_weights) * 100
+
+        return prtf_return
     
+       
     def portfolio_variance(self):
-        weights = np.array(self.ticker_weights)
-        covariance_matrix = self.prtf_df[self.tickers_list].cov()
-        portfolio_variance = np.dot(weights.T, np.dot(covariance_matrix, weights))
-        portfolio_risk = np.sqrt(portfolio_variance)
+        asset_weights_array = np.array(self.asset_weights)
+        covariance_matrix = self.prtf_df[self].cov()
+        portfolio_variance = asset_weights_array.T.dot(covariance_matrix).dot(asset_weights_array)
+        #portfolio_risk = np.sqrt(portfolio_variance)
         return portfolio_variance
+
+    
+    def portfolio_pe(self):
+
+        pe = 0
+        for i in self:
+            pe += self[i]['object'].pe
+        return pe / 10
+    
+    def portfolio_roe(self):
+
+        roe = 0
+        for i in self:
+            roe += self[i]['object'].roe
+        return roe / 10

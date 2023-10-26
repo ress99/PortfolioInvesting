@@ -3,24 +3,19 @@ import datetime as dt
 import config as c
 import data_op as op
 
-#####
-#Class to save the information regarding company stock values
-#And used to calculate various stock-related indicators
-#####
-class Ticker:
+class Asset:
 
     #####
     #Reads the data from the csv file and
     #Saves it in self.data
     #####
-    def save_all_data(self):
+    def save_hist_data(self):
 
         data = pd.read_csv(self.filename)                              
         data['Date'] = pd.to_datetime(data['Date']).dt.date                    
 
         return data
     
-
     #####
     #Returns the data between a start and end date
     #If not specified, it returns the original data.
@@ -42,9 +37,8 @@ class Ticker:
         if not date: 
             data.drop(columns = ['Date'], inplace = True)
 
-        self.selected_data = data
         return data
-    
+
 
     #####
     #Returns the stock return between start_date and end_date
@@ -52,7 +46,7 @@ class Ticker:
     #The column on which to calculate the returns can also be specified.
     #It is set as 'Close' by default
     #####
-    def stock_return(self, column = 'Close', start_date = None, end_date = None):
+    def asset_return(self, column = 'Close', start_date = None, end_date = None):
 
         #In case of an invalid column
         if column not in op.quote_columns:
@@ -70,20 +64,89 @@ class Ticker:
         #Get first and last value and calculate the return with it
         first_value = data.iloc[0][column]
         last_value = data.iloc[-1][column]
-        stock_return = 100 * (last_value - first_value) / first_value
+        asset_return = 100 * (last_value - first_value) / first_value
 
-        return stock_return
+        return asset_return
 
 
 
+#####
+#Class to save the information regarding company stock values
+#And used to calculate various stock-related indicators
+#####
+class SP_Ticker(Asset):
+
+    #####
+    #Reads the data from the csv file and
+    #Saves it in self.fdata
+    #####
+    def save_fin_data(self):
+
+        filename = op.get_path('SP500', 'F', self.ticker_name + c.filetype)       
+        data = pd.read_csv(filename, index_col = 0)
+
+        return data
+
+    def get_financial_value(self, financial, iloc_value = 0):
+
+        value = self.fdata.iloc[iloc_value][financial]
+        if isinstance(value, str):
+            if value == '-':
+                return -1
+            value = int(value.replace(',', ''))
+    
+        return value
+
+
+    def __init__(self, ticker_name, fin_data = False):
+
+        #Initializes ticker parameters
+        self.index = 'SP500'
+        self.ticker_name = ticker_name
+        self.filename = op.get_path(self.index, 'H', self.ticker_name + c.filetype)
+        self.data = self.save_hist_data()
+        # self.selected_data = self.data.copy()
+        self.first_day = self.data.iloc[0]['Date']
+        self.last_day = self.data.iloc[-1]['Date']
+        self.total_days = (self.last_day - self.first_day).days
+        if fin_data:
+            self.fdata = self.save_fin_data()
+
+    def price_book_ratio(self):
+
+        equity = self.get_financial_value('Total Equity Gross Minority Interest')
+        shares = self.get_financial_value('Ordinary Shares Number')
+        bv_per_share = equity / shares
+        self.pb_ratio = self.data.iloc[-1]['Close'] / bv_per_share
+        
+        return
+    
+    def return_on_equity(self):
+
+        net_income = self.get_financial_value('Net Income Common Stockholders')
+        equity = self.get_financial_value('Total Equity Gross Minority Interest')
+        self.roe = 100 * (net_income / equity)
+
+        return
+    
+    def price_earnings_ratio(self):
+
+        eps = self.get_financial_value('Basic EPS')
+        self.pe = self.data.iloc[-1]['Close'] / eps
+
+        return
+
+
+class DAX_Ticker(Asset):
+    
     def __init__(self, ticker_name):
 
         #Initializes ticker parameters
+        self.index = 'DAX40'
         self.ticker_name = ticker_name
-        self.filename = c.hist_folder + self.ticker_name + c.filetype
-        self.data = self.save_all_data()
-        self.selected_data = self.data.copy()
+        self.filename = op.get_path(self.index, 'H', self.ticker_name + c.filetype)
+        self.data = self.save_hist_data()
+        # self.selected_data = self.data.copy()
         self.first_day = self.data.iloc[0]['Date']
         self.last_day = self.data.iloc[-1]['Date']
-        self.total_days = len(self.data)
-    
+        self.total_days = (self.last_day - self.first_day).days

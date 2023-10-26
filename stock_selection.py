@@ -2,12 +2,16 @@ import data_op as op
 import pandas as pd
 import numpy as np
 import talib as ta
-from ticker import Ticker
-from sp500 import SP500
-from portfolio import Portfolio
+from module import Module
+import importlib.util
 import logging
 import time
+import datetime
 import config as c
+import pickle
+from functools import partial
+import os
+import json
 
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
@@ -17,167 +21,110 @@ from deap import base
 from deap import creator
 from deap import tools
 
-sp500 = SP500()
+class Stock_Selection(Module):
 
-'''log_level = logging.getLevelName(c.logging_level)
-logger = logging.getLogger(__name__)
-logger.setLevel(log_level)
-formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(message)s')
-file_handler = logging.FileHandler('stock_selection.log')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)'''
+    def register(self, alias, function, *args, **kargs):
 
-logging.basicConfig(level=logging.ERROR,
-                    format='%(asctime)s: %(levelname)s: %(message)s'
-                    )
+        pfunc = partial(function, *args, **kargs)
+        pfunc.__name__ = alias
+        pfunc.__doc__ = function.__doc__
 
+        setattr(self, alias, pfunc)
 
-PRTF_SIZE = 10
-IND_SIZE = 10
-START_DATE = '2022-10-01'
-END_DATE = '2023-08-01'
-CXPB, MUTPB = 0.5, 0.3
-pop_size = 50
-generations = 100
+    def get_data_to_pickle(self):
 
-def initPortfolio(sp500 = sp500, nmbr_stocks = 10, tickers = None):
-
-    if tickers is None:
-        tickers = random.sample(sp500.tickers_list, nmbr_stocks)
-    prtf = creator.Individual(sp500, 
-                              cardinality_constraint=nmbr_stocks,
-                              start_date = START_DATE, 
-                              end_date = END_DATE)
-    prtf.prtf_dict = tickers
-    prtf.apply_same_weights()
-    if not op.check_valid_dates(prtf.prtf_df, START_DATE, END_DATE):
-        prtf = initPortfolio()
-    return prtf
-
-def mate_prtfs(ind1, ind2):
-    tic1 = random.sample(ind1.tickers_list, 1)[0]
-    tic2 = random.sample(ind2.tickers_list, 1)[0]
-
-    ind1.substitute_tickers(tic1, tic2)
-    ind2.substitute_tickers(tic2, tic1)
-
-    return ind1, ind2
-
-def mutate_prtf(ind):
-
-    tic_to_insert = random.sample(ind.sp500.tickers_list, 1)[0]
-    tic_to_remove = random.sample(ind.tickers_list, 1)[0]
-
-    ind.substitute_tickers(tic_to_remove, tic_to_insert)
-
-    return ind
-
-def evaluate_prtf(ind):
-
-    prtf_return = ind.portfolio_return()
-    prtf_variance = ind.portfolio_variance()
-
-    ind.fitness.values = prtf_return, prtf_variance
-    #ind.fitness.values = prtf_return,
+        init_data = self.init_data_dict()
+        
+        data_to_pickle = {"init_data": init_data}
+        if hasattr(self, 'pop'):
+            data_to_pickle["pop"] = self.pop
+        if hasattr(self, 'pareto_front'):
+            data_to_pickle["pareto_front"] = self.pareto_front
+        if hasattr(self, 'pareto_fronts'):
+            data_to_pickle["pareto_fronts"] = self.pareto_fronts
+        if hasattr(self, 'final_prtf'):
+            data_to_pickle["final_prtf"] = self.final_prtf
+        
+        return data_to_pickle
     
+    def get_data_from_pickle(self, pickle_data):
 
-creator.create("FitnessMax", base.Fitness, weights=(1.0,-1.0))
-#creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-creator.create("Individual", Portfolio, fitness=creator.FitnessMax)
+        indexes = pickle_data['init_data']['indexes']
+        PRTF_SIZE = pickle_data['init_data']['PRTF_SIZE']
+        objectives = pickle_data['init_data']['objectives']
+        START_DATE = pickle_data['init_data']['START_DATE']
+        END_DATE = pickle_data['init_data']['END_DATE']
+        black_box_filepath = pickle_data['init_data']['black_box_filepath']
+        bb_mode = pickle_data['init_data']['bb_mode']
+        CXPB = pickle_data['init_data']['CXPB']
+        MUTPB = pickle_data['init_data']['MUTPB']
+        pop_size = pickle_data['init_data']['pop_size']
+        generations = pickle_data['init_data']['generations']
 
-t = base.Toolbox()
-t.register("population", tools.initRepeat, list, initPortfolio)
-t.register("mate", mate_prtfs)
-t.register("mutate", mutate_prtf)
-t.register("evaluate", evaluate_prtf)
-t.register("select", tools.selNSGA2)
-t.register("selBest", tools.selBest)
+        ss = Stock_Selection(indexes, PRTF_SIZE, objectives, START_DATE, END_DATE,
+                              CXPB, MUTPB, pop_size, generations, black_box_filepath)
+        
+        ss.bb_mode = bb_mode
 
-pop = t.population(n=pop_size)
-list(map(t.evaluate, pop))
+        if 'pop' in pickle_data:
+            ss.pop = pickle_data['pop']
+        if 'pareto_front' in pickle_data:
+            ss.pareto_front = pickle_data['pareto_front']
+        if 'pareto_fronts' in pickle_data:
+            ss.pareto_fronts = pickle_data['pareto_fronts']
+        if 'final_prtf' in pickle_data:
+            ss.final_prtf = pickle_data['final_prtf']
 
-# Extracting all the fitnesses of
-fits = np.array([ind.fitness.values for ind in pop])
-g = 0
-Cost_Pop = np.zeros(generations+1)
-a = 0
-mean_returns = []
-mean_var = []
-pareto_front=tools.ParetoFront()
+        return ss
 
-while g < generations:
-    # A new generation
-    g = g + 1
 
-    # Select the offspring for the next generation
-    offspring = t.select(pop, len(pop))
+    def init_population(self):
+        self.creator_individual(self.objectives)
+        self.pop = [self.init_Portfolio_Individual() for _ in range(self.pop_size)]
+        return
 
-    # Clone the selected individuals
-    pop_tickers = [i.tickers_list for i in offspring]
-    offspring = list(initPortfolio(tickers = i) for i in pop_tickers)
-    #offspring = list(map(t.clone, offspring))
+    def import_blackbox_module(self, module_path):
+    
+        if module_path == "":
+            return -1
+        spec = importlib.util.spec_from_file_location("blackbox_module", module_path)
+        self.bb = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(self.bb)
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
 
-    # Apply crossover and mutation on the offspring
-    a = 0
-    for child1, child2 in zip(offspring[::2], offspring[1::2]):
+    def run_method(self, method):
+        
+        if hasattr(self.bb, method):
+            self.bb.run_blackbox()
+            return 1
+        else:
+            print("Module does not have a" + method + "function.")
+            return False
 
-        # cross two individuals with probability CXPB
-        if random.random() < CXPB:
-            t.mate(child1, child2)
 
-            # fitness values of the children
-            # must be recalculated later
-            del child1.fitness.values
-            del child2.fitness.values
+    def __init__(self, indexes = None, PRTF_SIZE = None, objectives = None, 
+                 START_DATE = None, END_DATE = None, CXPB = None, MUTPB = None, 
+                 pop_size = None, generations = None, black_box_filepath = None):
 
-    for mutant in offspring:
+        self.folder = c.as_folder
+        if indexes is None:
+            return
+        self.indexes = indexes
+        self.PRTF_SIZE = PRTF_SIZE
+        self.objectives = objectives
+        self.START_DATE = START_DATE
+        self.END_DATE = END_DATE
+        self.black_box_filepath = black_box_filepath
+        self.CXPB = CXPB
+        self.MUTPB = MUTPB
+        self.pop_size = pop_size
+        self.generations = generations
+        if black_box_filepath is not None:
+            self.import_blackbox_module(black_box_filepath)
+            self.bb_mode = True
+        else:
+            self.bb_mode = False
 
-        # mutate an individual with probability MUTPB
-        if random.random() < MUTPB:
-            t.mutate(mutant)
-            del mutant.fitness.values
-
-    # Evaluate the individuals with an invalid fitness
-    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-    list(map(t.evaluate, invalid_ind))
-
-    # The population is entirely replaced by the offspring
-    pop = t.select(pop + offspring, pop_size)
-    #pop[:] = offspring
-
-    # Gather all the fitnesses in one list and print the stats
-    fits = np.array([ind.fitness.values for ind in pop])
-    print("Generation %d || Size of Population: %d ||  Mean Return is %f || Mean Variance is %f" % (g, len(fits), fits[:, 0].mean(), fits[:, 1].mean()))
-
-start = time.perf_counter()
-pareto_front.update(pop)
-pareto_front_values = np.array([i.fitness.values for i in pareto_front])
-print("Generation %d || Length of Pareto: %d ||  Mean Return is %f || Mean Variance is %f" % (g, len(pareto_front), pareto_front_values[:, 0].mean(), pareto_front_values[:, 1].mean()))
-end = time.perf_counter()
-print(end - start)
-
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=fits[:, 0], 
-                        y=fits[:, 1], 
-                        mode = 'markers',
-                        marker = dict(size=8)
-                        ))
-fig.add_trace(go.Scatter(x=pareto_front_values[:, 0], 
-                        y=pareto_front_values[:, 1], 
-                        mode = 'markers + lines',
-                        marker = dict(size=8)
-                        ))
-fig.update_layout(title='Portfolios',
-                xaxis_title='Return',
-                yaxis_title='Variance',
-                width = 900,
-                height = 700
-                )
-fig.show()
-
-'''plt.figure()
-plt.scatter(mean_returns, mean_var)
-plt.title('Population on generation %d' % g)
-plt.xlabel('Return')
-plt.ylabel('Variance')
-plt.show()'''
+    

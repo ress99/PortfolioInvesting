@@ -5,7 +5,7 @@ import random
 from functools import partial
 import numpy as np
 import pandas as pd
-from sp500 import SP500
+from index import SP500
 
 
 l1 = [1, 2, 3, 4, 5]
@@ -26,7 +26,7 @@ print(tic1_weights,tic2_weights)
 
 sp500 = SP500()
 from functools import partial
-gen_idx = partial(random.sample, sp500.tickers_list, len(sp500.tickers_list))
+gen_idx = partial(random.sample, sp500.asset_list, len(sp500))
 tools.initIterate(list, gen_idx)
 
 #Constants to use

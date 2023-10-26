@@ -1,4 +1,4 @@
-import bs4 as bs
+from bs4 import BeautifulSoup
 import requests
 import yfinance as yf
 import datetime as dt
@@ -6,45 +6,14 @@ import pandas as pd
 import numpy as np
 import os
 import data_op as op
-import calendar
-import ticker
 import time
 import config as c
 import logging
+from index import SP500, DAX40
 
 
 from datetime import datetime, date
 from urllib.request import Request, urlopen
-
-'''log_level = logging.getLevelName(c.logging_level)
-logger = logging.getLogger(__name__)
-logger.setLevel(log_level)
-formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(message)s')
-file_handler = logging.FileHandler('download_data.log')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)'''
-
-
-#####
-#Update list of all S&P500 tickers
-#####
-def update_sp500_tickers():
-
-    agent = {"User-Agent":"Mozilla/5.0"}
-    url = 'https://www.slickcharts.com/sp500'
-    source=requests.get(url, headers=agent).text
-    df_list = pd.read_html(source)
-
-    sp500_df = df_list[0]
-    sp500_df = sp500_df.sort_values('Company')
-    sp500_list = sp500_df['Symbol'].tolist()
-    sp500_list = [tic.replace('.', '-') for tic in sp500_list]
-
-    sp500_series = pd.Series (sp500_list, name = 'S&P500')
-    sp500_series.to_csv('Data/sp500tickers.csv', index = False)             #Save list of all tickers to csv file
-
-    return
-
 
 
 #####
@@ -61,17 +30,17 @@ def data_index_to_date(data):
 
 
 #####
-#Updates the quotes of all the tickers in the sp500tickers.csv file
-#If a list of companies is not specified, all the tickers will be updated
+#Updates the quotes of all the assets in the index.csv file
+#If a list of companies is not specified, all the assets will be updated
 #####
-def update_historical_data(tickers = None):
+def update_historical_data(index, assets = None):
 
-    if tickers is None:                                                     #If no list of tickers is specified
-        tickers = op.get_sp500_tickers()                               #Gets list of all S&P500 tickers
+    if assets is None:                                                     #If no list of assets is specified
+        assets = index.get_all_assets()                               #Gets list of all S&P500 assets
     i = 0
-    for tic in tickers:
-        to_save_filename = c.hist_folder + tic + c.filetype        #Path for ticker file
-        logger.info('The next ticker is: %s', tic)
+    for tic in assets:
+        to_save_filename = op.get_path(index.name, 'H', tic + c.filetype)
+        logging.info('The next asset is: %s', tic)
 
         if os.path.exists(to_save_filename):                                        #If the file exists
 
@@ -83,7 +52,7 @@ def update_historical_data(tickers = None):
             last_date += dt.timedelta(days=1)                                       #Increments 1 day
 
             if last_date < date_today:                                                                  #If today's date is after last
-                logger.info('Ticker %s will be updated.', tic)                                              #date in file, then update file
+                logging.info('Asset %s will be updated.', tic)                                              #date in file, then update file
                 new_data = yf.download(tic, start = last_date, end = date_today, interval = '1d')       #Download new data
 
                 if len(new_data) > 0:                                               #If downloaded data is not null
@@ -92,103 +61,100 @@ def update_historical_data(tickers = None):
                     new_df.reset_index(inplace = True, drop = True)
                     new_df.to_csv(to_save_filename, index = False)                #Save to csv
             else:
-                logger.info('No update available for %s.', tic)                               #If there is no update for this ticker
+                logging.info('No update available for %s.', tic)                               #If there is no update for this asset
 
         else:   
+            print(tic, 'is new')
             start = time.time()                                                            #In case the file does not exists
             data = yf.download(tic, period = 'max', interval = '1d')        #Download data from yfinance
             data = data_index_to_date(data)                                 
             data = data.iloc[:-1]                                           #Remove last row - may not be a complete day     
             data.to_csv(to_save_filename, index = False)                  #Save to csv
             end = time.time()
-            logger.debug(end - start)
-        logger.debug(i)
+            logging.debug(end - start)
+        logging.debug(i)
         i +=1
 
 
 
-def download_earnings(tic):
+def get_index(header):
 
-    data_earnings = yf.Ticker(tic).earnings_history
-    if data_earnings is not None:
-        data_earnings['month'] = data_earnings['Earnings Date'].astype(str).str[:3].apply(lambda x: list(calendar.month_abbr).index(x))
-        data_earnings['day'] = data_earnings['Earnings Date'].astype(str).str[4:6]
-        data_earnings['year'] = data_earnings['Earnings Date'].astype(str).str[8:12]
-        data_earnings['Date'] = pd.to_datetime(data_earnings[['year', 'month', 'day']])
-        data_earnings['Date'] = data_earnings['Date'].dt.date
-        data_earnings = data_earnings[['Date', 'EPS Estimate', 'Reported EPS']]
-        date_today = date.today()
-        data_earnings = data_earnings.loc[data_earnings['Date'] < date_today] 
-    
-    return data_earnings
+    spans = header.find_all('span')
+    header_list = [span.text for span in spans[1:]]
+    for idx, h in enumerate(header_list):
+        if h == 'ttm':
+            header_list[idx] = 'TTM'
+        else:
+            header_list[idx] = dt.datetime.strptime(h, '%m/%d/%Y').date()
 
-def download_dividends(tic):
-
-    data_dividends = yf.Ticker(tic).dividends
-    data_dividends = data_dividends.to_frame()
-    data_dividends = data_index_to_date(data_dividends)
-
-    return data_dividends
-
-def update_dividends(tic):
-
-    to_save_filename = c.hist_folder + tic + c.filetype
-
-    if not os.path.exists(to_save_filename):
-        update_historical_data(tic)
-    
-    data_dividends = download_dividends(tic)
+    return header_list
 
 
-    
+def get_financials(index, assets = None):
 
-asd = download_dividends('ko')
-asddd = yf.Ticker('ko').dividends
-print(asd)
+    if assets is None:
+        assets = index.get_all_assets()   
 
+    for asset in assets:
+        
+        logging.info('Downloading financials from %s', asset)
 
-def update_financials():
+        filepath = op.get_path('SP500', 'F', asset + c.filetype)
+        if os.path.exists(filepath):
+            continue
 
-    tickers = op.get_sp500_tickers()
+        headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+        url_list = [f"https://finance.yahoo.com/quote/{asset}/financials",
+            f"https://finance.yahoo.com/quote/{asset}/balance-sheet?p={asset}",
+            f"https://finance.yahoo.com/quote/{asset}/cash-flow?p={asset}"]
 
-    for tic in tickers:
+        for url in url_list:
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Find the financial data table
+                header = soup.find('div', class_='D(tbhg)')
+                table = soup.find('div', class_='D(tbrg)')
+                rows = table.find_all('div', class_='D(tbr)')
 
-        to_save_filename = c.hist_folder + tic + c.filetype
-        financials_df = yf.Ticker(tic).financials.transpose()
-        financials_df.reset_index(drop = False, inplace = True)
-        financials_df.rename(columns={"index": "Date"})
-        financials_df['Date'] = financials_df['Date'].dt.date
-        if os.path.exists(to_save_filename):
-            data = pd.read_csv(to_save_filename)
-            data.merge(financials_df, )
+                list_of_lists = [None] * len(rows)
+                for idx, row in enumerate(rows):
 
+                    value = [None] * (len(row))
+                    element_list = row.find_all('div', class_='D(tbc)')
+                    value = [element.text for element in element_list]
 
-'''
-tic = 'AAL'
-to_save_filename = c.hist_folder + tic + c.filetype
-financials_df = yf.Ticker(tic).financials.transpose()
-financials_df.index = financials_df.index.tz_localize(None)
-financials_df.reset_index(inplace = True)
-financials_df.rename(columns={"index": "Date"}, inplace = True)
-financials_df['Date'] = financials_df['Date'].dt.date
-fcolumns = financials_df.columns[1:]
+                    '''if len(value) == 5:
+                        value.insert(1, None)'''
+                    list_of_lists[idx] = value
 
+                list_of_lists = [list(row) for row in zip(*list_of_lists)]  
 
+                if 'financials' in url:
+                    df = pd.DataFrame(list_of_lists[1:], columns=list_of_lists[0], index = get_index(header))
+                else:
+                    df_to_merge = pd.DataFrame(list_of_lists[1:], columns=list_of_lists[0], index = get_index(header))
+                    df = pd.merge(df, df_to_merge, right_index=True, left_index=True)
 
-if os.path.exists(to_save_filename):
-    data = pd.read_csv(to_save_filename)
-    data['Date'] = data['Date'].dt.date
-    if financials_df.columns[1] not in data.columns:
-        data = data.merge(financials_df, on = 'Date', how = 'outer')
-        data.sort_values(by = 'Date', inplace = True)
-        data.reset_index(inplace = True, drop = True)
-        data.to_csv(to_save_filename, index = False)
-    else:
-        dates = financials_df['Date']
-        for i in dates:
-            #data.loc[data['Date'] == dates[i]][fcolumns] = financials_df[fcolumns]
-            print(data[data['Date'] == i])
-            #print(data[data['Date'] == dates[0]])
-        #print(data[financials_df.columns])
+            else:
+                print(f"Error: Unable to retrieve data for {asset}")
+                return None
+            
+        df.to_csv(filepath)
 
-'''
+        logging.info('Financials from %s saved.', asset)
+
+    return
+
+if __name__ == '__main__':
+
+    sp = SP500()
+    update_historical_data(sp)
+    get_financials(sp)
+
+    dax = DAX40()
+    update_historical_data(dax)
+    get_financials(dax)

@@ -1,2 +1,6 @@
 Data/
+Logs/
+Portfolios/
 __pycache__/
+*.ui
+launch.json

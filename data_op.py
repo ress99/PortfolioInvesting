@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import config as c
 import datetime as dt
+import os
 
 
 
@@ -9,16 +10,6 @@ data_folder = 'Data/'
 initial_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
 quote_columns = initial_columns[1:-1]
 
-
-#####
-#Returns all S&P500 Tickers being used
-#####
-def get_sp500_tickers():
-
-    tickers_df = pd.read_csv(data_folder + 'sp500tickers.csv')
-    tickers = tickers_df['S&P500'].tolist()
-
-    return tickers
 
 def date_str_to_dt(date):
 
@@ -122,16 +113,17 @@ def same_df_tickers (sel_tickers):
     return hist_df
 
 
-#####
-#Concatenates tickers in the same dataframe for 
-#####
-#def str_to_date (ticker):
+def get_path(index_name, data_type = None, filename = None):
 
+    folder_names = [c.data_folder, index_name]
 
-def get_fa(tic):
+    if data_type is not None:
+        if data_type == 'H':
+            folder_names.append(c.hist_folder)
+        if data_type == 'F':
+            folder_names.append(c.financial_folder)
 
-    filename = data_folder + 'FA/' + tic + c.filetype
-    data = pd.read_csv(filename)
-    data['Date'] = data['Date'].dt.date
-    return data
+    if filename is not None:
+        folder_names.append(filename)
 
+    return os.path.join(*folder_names)

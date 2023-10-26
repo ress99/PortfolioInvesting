@@ -1,0 +1,727 @@
+from PyQt5 import QtCore, QtGui, QtWidgets
+import os
+import config as c
+import index
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import re
+import matplotlib.pyplot as plt
+import numpy as np
+
+import mate as m
+import mutate as mut
+import evaluate as e
+import select_ as s
+import algorithm as a
+
+# pyuic5 -x test.ui -o tes.py
+import inspect
+import importlib
+from portfolio import Portfolio
+from deap import base
+from deap import creator
+from deap import tools
+
+from stock_selection import Stock_Selection
+from portfolio_optimization import Portfolio_Optimization
+
+from main_tab import Ui_MainWindow
+from tab_as import Ui_AS
+from tab_po import Ui_PO
+
+
+class Backend():
+
+    def setup_create_object(self):
+        self.create_index_dropdown()
+        self.connect_object_buttons()
+        self.setup_line_inputs()
+        self.radio_buttons()
+
+    def setup_run_algorithm(self):
+        self.add_func_names()
+        self.connect_algo_buttons()
+
+
+    def setup_choose_individual(self):
+        self.populate_combo_box_choose_plot()
+        self.buttonPlot.clicked.connect(self.get_plot)
+        self.checkBoxSimplified.stateChanged.connect(self.add_prtfs)
+        self.comboBoxChoosePlot.currentIndexChanged.connect(self.combo_choose_plot_changed)
+        self.buttons_final_prtf()
+  
+
+
+    def combo_choose_plot_changed(self):
+
+        text = self.comboBoxChoosePlot.currentText()
+        if text == "Multiple Objectives":
+            bool_ = False
+        else:
+            bool_ = True
+
+        self.spinMinX.setDisabled(bool_)
+        self.spinMaxX.setDisabled(bool_)
+        self.spinMinY.setDisabled(bool_)
+        self.spinMaxY.setDisabled(bool_)
+        self.checkBoxBoundaries.setDisabled(bool_)
+        
+    def choose_final_prtf(self):
+
+        if self.status == 2:
+            selected_ind = self.get_selected_prtf()
+            if selected_ind:
+                self.obj.final_prtf = selected_ind
+                self.labelFinalPrtf.setText("Final Portfolio: " + str(self.obj.final_prtf.asset_list))
+                self.update_status()
+            else:
+                print('Please select a valid Portfolio.')
+        else:
+            print('Please remove the Portfolio first.')
+
+    def remove_final_prtf(self):
+
+        if self.status == 3:
+            del self.obj.final_prtf
+            self.labelFinalPrtf.setText("Please select a Portfolio")
+            self.update_status()
+        else:
+            print('Please select a Portfolio first.')
+
+    def buttons_final_prtf(self):
+
+        self.buttonChoosePortfolio.clicked.connect(self.choose_final_prtf)
+        self.buttonRemovePortfolio.clicked.connect(self.remove_final_prtf)
+        self.labelFinalPrtf.setWordWrap(True)
+
+    def radio_buttons(self): 
+
+        self.bb_mode = False
+        self.evolutionary_algorithm_spins(False)
+        
+        self.radioEA = QtWidgets.QRadioButton("Evolutionary Algorithm")
+        self.radioEA.setChecked(True)
+        self.layoutEABB.addWidget(self.radioEA)
+        self.radioEA.toggled.connect(lambda: self.radio_button_clicked(self.radioEA))
+
+        self.radioBB = QtWidgets.QRadioButton("Black-Box")
+        self.layoutEABB.addWidget(self.radioBB)
+        self.radioBB.toggled.connect(lambda: self.radio_button_clicked(self.radioBB))
+
+
+    def radio_button_clicked(self, button):
+        if button.text() == "Evolutionary Algorithm":
+            self.evolutionary_algorithm_spins(False)
+        elif button.text() == "Black-Box":
+            self.evolutionary_algorithm_spins(True)
+
+    def evolutionary_algorithm_spins(self, bool):
+        
+        self.bb_mode = bool
+
+        self.lineInputBBFile.setDisabled(not bool)
+
+        self.doubleSpinCX.setDisabled(bool)
+        self.doubleSpinMUT.setDisabled(bool)
+        self.spinGenerations.setDisabled(bool)
+        self.spinPopSize.setDisabled(bool)
+
+    def setup_line_inputs(self):
+
+        regex = QtCore.QRegExp('[0-9,\s-]+')
+        validator = QtGui.QRegExpValidator(regex)
+        self.lineInputObjectives.setValidator(validator)
+        self.lineInputObjectives.setPlaceholderText("CSV format")
+        
+        regex = QtCore.QRegExp('[a-zA-Z/\\\\.]+')
+        validator = QtGui.QRegExpValidator(regex)
+        self.lineInputBBFile.setValidator(validator)
+        self.lineInputBBFile.setPlaceholderText("e.g. blackbox.py")
+
+        return
+
+
+    def populate_combo_box_choose_plot(self):
+
+        self.comboBoxChoosePlot.addItem("Multiple Objectives")
+        self.comboBoxChoosePlot.addItem("All Portfolio Returns")
+        self.comboBoxChoosePlot.addItem("Chosen Portfolio Assets")
+
+    def b_end_init_pop(self):
+
+        if self.status == 1:
+            self.obj.init_population()
+
+    def add_func_names(self):
+
+        mate_list = self.get_methods('mate.py')
+        [self.comboBoxMate.addItem(i) for i in mate_list]
+
+        mutate_list = self.get_methods('mutate.py')
+        [self.comboBoxMutate.addItem(i) for i in mutate_list]
+
+        select_list = self.get_methods('select_.py')
+        [self.comboBoxSelect.addItem(i) for i in select_list]
+
+        evaluate_list = self.get_methods('evaluate.py')
+        [self.comboBoxEvaluate.addItem(i) for i in evaluate_list]
+
+        algo_list = self.get_methods('algorithm.py')
+        [self.comboBoxAlgo.addItem(i) for i in algo_list]
+
+    def b_end_register_methods(self):
+
+        if self.status == 1:
+            self.obj.select = getattr(s, self.comboBoxSelect.currentText())
+
+            self.obj.mate = getattr(m, self.comboBoxMate.currentText())
+            
+            self.obj.mutate = getattr(mut, self.comboBoxMutate.currentText())
+            
+            self.obj.evaluate = getattr(e, self.comboBoxEvaluate.currentText())
+
+            self.obj.run_algorithm = getattr(a, self.comboBoxAlgo.currentText())
+
+    def b_end_run_algo(self):
+
+        if self.status == 1:
+            if hasattr(self.obj, 'select'):
+                self.obj.run_algorithm(self.obj)
+
+    def connect_object_buttons(self):
+        self.buttonCreateObject.clicked.connect(self.create_object)
+        self.buttonImportObject.clicked.connect(self.import_asset_selection)
+        self.buttonDeleteObject.clicked.connect(self.delete_asset_selection)
+        self.buttonSaveObject.clicked.connect(self.save_asset_selection)
+
+    def clear_list_prtfs(self):
+            
+            self.comboBoxListAssets.clear()
+            self.comboBoxListAssets.addItem("Select Portfolio")
+    
+    def add_prtfs(self):
+      
+        
+        if self.status >= 2:
+
+            if self.checkBoxSimplified.isChecked():
+                if self.comboBoxListAssets.count() > 4:
+                    self.clear_list_prtfs()
+                self.prtfs_on_display = [self.obj.pareto_front[i] 
+                               for i in [0, len(self.obj.pareto_front)//2, -1]]
+                aux = [i.asset_list for i in self.prtfs_on_display]
+            else:
+                if self.comboBoxListAssets.count() == 4:
+                    self.clear_list_prtfs()
+                asset_lists = [i.asset_list for i in self.obj.pareto_front]
+                aux, ids = self.remove_duplicates(asset_lists)
+                self.prtfs_on_display = [self.obj.pareto_front[i] for i in ids]
+
+            for i in aux:
+                self.comboBoxListAssets.addItem(str(list(i)))
+        else:
+            self.clear_list_prtfs()
+
+    
+    def get_plot(self):
+        
+        if self.status >= 2:
+
+            plt.close()
+            self.clear_layout(self.layoutFig)
+            self.canvas = FigureCanvas(plt.figure())
+            self.toolbar = NavigationToolbar(self.canvas, self.verticalLayoutWidget_2)
+            self.layoutFig.addWidget(self.toolbar)
+            self.layoutFig.addWidget(self.canvas)
+            
+            ax = self.canvas.figure.add_subplot(111)
+
+            idx = self.comboBoxChoosePlot.currentIndex()
+            if idx == 0:
+                self.plot_MO(ax)
+            elif idx == 1:
+                self.plot_prtf_returns(ax)
+            elif idx == 2:
+                self.plot_asset_returns(ax)
+
+            self.canvas.draw()
+
+
+    def text_for_plot(self, text):
+
+        self.clear_layout(self.layoutFig)
+
+        self.labelPlot = QtWidgets.QLabel(text)
+        font = QtGui.QFont()
+        font.setPointSize(25)
+        self.labelPlot.setFont(font)
+        self.labelPlot.setAlignment(QtCore.Qt.AlignCenter)
+        self.layoutFig.addWidget(self.labelPlot)
+
+
+    def plot_prtf_returns(self, ax):
+
+        selected_ind = self.get_selected_prtf()
+        final_prtf = None
+        if hasattr(self.obj, 'final_prtf'):
+            final_prtf = self.obj.final_prtf
+        if selected_ind or final_prtf:
+            alpha = 0.75
+        else:
+            alpha = 1
+
+        for ind in self.obj.pareto_front:
+
+            df_to_plot = self.get_prtf_return_df(ind)
+            ax.plot(df_to_plot.index, df_to_plot.values, alpha = alpha)
+
+        if selected_ind:
+            df_to_plot = self.get_prtf_return_df(selected_ind)
+            ax.plot(df_to_plot.index, df_to_plot.values, color = 'black', linewidth=2.0, label = 'Selected Portfolio')
+
+        if final_prtf:
+            df_to_plot = self.get_prtf_return_df(final_prtf)
+            ax.plot(df_to_plot.index, df_to_plot.values, color = '#ff0000', linewidth=2.0, label = 'Final Portfolio')
+           
+        ax.set_xlabel('X Axis Label')
+        ax.set_ylabel('Y Axis Label')
+        ax.set_title('Sine Wave Plot')
+        ax.legend()
+        ax.grid(True)
+
+        return   
+
+    def get_prtf_return_df(self, ind):
+
+        df = ind.prtf_df.copy()
+        df.set_index('Date', inplace=True)
+        df = df / df.iloc[0] * 100
+        return df.dot(ind.asset_weights)   
+
+
+    def plot_asset_returns(self, ax):
+
+        selected_ind = self.get_selected_prtf()
+        if not selected_ind:
+            selected_ind = self.prtfs_on_display[0]
+
+        df = selected_ind.prtf_df.copy()
+
+        df.set_index('Date', inplace=True)
+        df = df / df.iloc[0] * 100
+        for col in df.columns:
+            ax.plot(df.index, df[col], label=col)
+
+        ax.set_xlabel('X Axis Label')
+        ax.set_ylabel('Y Axis Label')
+        ax.set_title('Sine Wave Plot')
+        ax.grid(True)
+        ax.legend()
+
+    def remove_bounds(self):
+
+        if not self.checkBoxBoundaries.isChecked():
+            return self.obj.pareto_fronts
+        else:
+            min_values = [self.spinMinX.value(), self.spinMinY.value()]
+            max_values = [self.spinMaxX.value(), self.spinMaxY.value()]
+            arr_list = [None] * len(self.obj.pareto_fronts)
+            for idx, arr in enumerate(self.obj.pareto_fronts):
+                arr_list[idx] = np.array([i for i in arr if all(min_v <= val <= max_v for val, (min_v, max_v) in zip(i, zip(min_values, max_values)))])
+            return arr_list
+
+    def plot_MO(self, ax):
+
+        arr_list = self.remove_bounds()
+
+        for idx, arr in enumerate(arr_list):
+            if idx == len(arr_list) - 1:
+                ax.plot(arr[:, 0], arr[:, 1], color = 'blue', marker = 'o', label = 'Pareto Front')
+            else:
+                ax.plot(arr[:, 0], arr[:, 1], color = '#8dff52', marker = 'o', alpha = 0.8)
+
+
+        selected_ind = self.get_selected_prtf()
+        if selected_ind:
+            prtf_point = selected_ind.fitness.values
+            ax.plot(prtf_point[0], prtf_point[1], color = 'black', marker = 'o', label = 'Selected Portfolio')
+
+        if hasattr(self.obj, 'final_prtf'):
+            prtf_point = self.obj.final_prtf.fitness.values
+            ax.plot(prtf_point[0], prtf_point[1], color = 'red', marker = 'o', label = 'Final Portfolio')
+
+
+        ax.set_xlabel('X Axis Label')
+        ax.set_ylabel('Y Axis Label')
+        ax.set_title('Sine Wave Plot')
+        ax.legend()
+        ax.grid(True)
+
+    def get_selected_prtf(self):
+        combo_idx = self.comboBoxListAssets.currentIndex() - 1
+        print(len(self.prtfs_on_display), combo_idx)
+        if combo_idx >= 0:         
+            return self.prtfs_on_display[combo_idx]
+        return False
+
+    def get_selected_indexes(self):
+
+        selected_indexes = [item.text() for item in self.listIndexes.selectedItems()]
+        indexes = [self.index_dict[i] for i in selected_indexes]
+        return indexes
+
+    def check_input(self):
+        input_text = self.line_edit.text()
+
+        # Define a regular expression pattern to match integers separated by comma and space
+        pattern = r'^\d+(, \d+)*$'
+
+        if re.match(pattern, input_text):
+            QtWidgets.QMessageBox.information(self, 'Valid Input', 'Input is valid!')
+        else:
+            QtWidgets.QMessageBox.warning(self, 'Invalid Input', 'Input must be integers separated by comma and space.')
+
+
+    def get_selected_inputs(self):
+
+        PRTF_SIZE = self.spinPrtfSize.value()
+        bb_filepath = self.lineInputBBFile.text()
+        if len(self.lineInputObjectives.text()) != 0:
+            values = re.split(r'\s*,\s*', self.lineInputObjectives.text())
+            objectives = tuple(map(int, values))
+        else: 
+            objectives = (1, -1)
+        MUTPB, CXPB = self.doubleSpinMUT.value(), self.doubleSpinCX.value()
+        pop_size, generations = self.spinPopSize.value(), self.spinGenerations.value()
+        START_DATE, END_DATE = str(self.startDateSelect.date().toPyDate()), str(self.endDateSelect.date().toPyDate())
+        indexes = self.get_selected_indexes()
+
+        return indexes, PRTF_SIZE, objectives, START_DATE, END_DATE, CXPB, MUTPB, pop_size, generations, bb_filepath
+
+    def create_object(self):
+
+        if self.status > 0:
+
+            print('Please delete the previous  object first.')
+        
+        else:
+
+            self.buttonCreateObject.setEnabled(False)  # Disable the button
+            indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations, bb_filepath = self.get_selected_inputs()
+
+            if self.bb_mode:
+                self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, black_box_filepath = bb_filepath)
+            else:
+                self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations)
+
+            self.update_status()
+            self.buttonCreateObject.setEnabled(True)  # Re-enable the button
+
+    def delete_asset_selection(self):
+
+        if self.status >= 1:
+            self.obj.delete_creator_individual()
+            delattr(self, 'obj')
+            self.update_status()
+        else:
+            # TODO: POPUP
+            print('There is no Stock Selection object')
+
+    def import_asset_selection(self):
+
+        if self.status >= 1:
+
+            print('Please delete the previous  object first.')
+        
+        else:
+            options = QtWidgets.QFileDialog.Options()
+
+            current_dir = os.getcwd()
+            if isinstance(self, Ui_AS):
+                dir = os.path.join(*[current_dir, c.prtf_folder, c.as_folder])
+            elif isinstance(self, Ui_PO):
+                dir = os.path.join(*[current_dir, c.prtf_folder, c.po_folder])
+            filePath, _ = QtWidgets.QFileDialog.getOpenFileName(None, "Open File", dir, "Pickle Files (*.pkl)", options=options)
+            file_no_extension = os.path.splitext(os.path.basename(filePath))[0]
+
+            obj = self.obj_class()
+            self.obj = obj.read_pickle(file_no_extension)
+            self.update_status()
+            
+    def save_asset_selection(self):
+
+        self.obj.save_pickle()
+        return
+
+    def populate_ss_layout(self):
+        
+        if self.status > 0:
+
+            if self.bb_mode:
+                self.labelObject.setText("Black-Box Object:")
+            else:
+                self.labelObject.setText("Evolutionary Object:")
+            self.labelIdxs.setText("Indexes: " + str(list(self.obj.indexes.keys())))
+            self.labelPrtfSizeInfo.setText("Portfolio Size: " + str(self.obj.PRTF_SIZE))
+            self.labelObjectiveWeights.setText("Objective Weights: " + str(self.obj.objectives))
+            self.labelStartDateInfo.setText("Start Date: " + self.obj.START_DATE)
+            self.labelEndDateInfo.setText("End Date: " + self.obj.END_DATE)
+            if self.bb_mode:
+                self.labelBBPath.setText("Black-box Filepath: " + str(self.obj.black_box_filepath))
+            else:
+                self.labelCXInfo.setText("Crossover Probability: " + str(self.obj.CXPB))
+                self.labelMUTInfo.setText("Mutation Probability: " + str(self.obj.MUTPB))
+                self.labelPopSizeInfo.setText("Population Size: " + str(self.obj.pop_size))
+                self.labelGenerationsInfo.setText("Generations: " + str(self.obj.generations))
+        
+        else:
+            add_str = " - "
+            self.labelObject.setText("There is no Object.")
+            self.labelIdxs.setText("Indexes:" + add_str)
+            self.labelPrtfSizeInfo.setText("Portfolio Size:" + add_str)
+            self.labelObjectiveWeights.setText("Objective Weights: " + add_str)
+            self.labelStartDateInfo.setText("Start Date:" + add_str)
+            self.labelEndDateInfo.setText("End Date:" + add_str)
+            self.labelCXInfo.setText("Crossover Probability:" + add_str)
+            self.labelMUTInfo.setText("Mutation Probability:" + add_str)
+            self.labelPopSizeInfo.setText("Population Size:" + add_str)
+            self.labelGenerationsInfo.setText("Generations:" + add_str)
+            self.labelBBPathInfo.setText("Black-box Filepath:" + add_str)
+
+    def create_index_dropdown(self):
+
+        self.index_dropdown()
+
+        for i in self.index_dict:
+            
+            item = QtWidgets.QListWidgetItem()
+            item.setText(str(i))
+            self.listIndexes.addItem(item)
+
+    def index_dropdown(self):
+
+        all_classes = [(name, cls) for name, cls in inspect.getmembers(index) if inspect.isclass(cls) and cls.__module__ == index.__name__ and name != "Index"]
+        self.index_dict = {i[0]: i[1]() for i in all_classes}
+        return
+
+    #Substitute in final version
+    def create_ss_layout(self):
+
+        self.verticalLayoutWidget = QtWidgets.QWidget(self.tabRunAlgorithm)
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(50, 60, 201, 391))
+        self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
+
+        self.layoutInfo = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
+        self.layoutInfo.setContentsMargins(0, 0, 0, 0)
+        self.layoutInfo.setObjectName("layoutInfo")
+        
+        self.labelObject = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelObject.setObjectName("labelObject")
+        self.layoutInfo.addWidget(self.labelObject)
+
+        self.labelIdxs = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelIdxs.setObjectName("labelIdxs")
+        self.layoutInfo.addWidget(self.labelIdxs)
+
+        self.labelPrtfSizeInfo = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelPrtfSizeInfo.setObjectName("labelPrtfSizeInfo")
+        self.layoutInfo.addWidget(self.labelPrtfSizeInfo)
+
+        self.labelStartDateInfo = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelStartDateInfo.setObjectName("labelStartDateInfo")
+        self.layoutInfo.addWidget(self.labelStartDateInfo)
+
+        self.labelEndDateInfo = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelEndDateInfo.setObjectName("labelEndDateInfo")
+        self.layoutInfo.addWidget(self.labelEndDateInfo)
+
+        self.labelCXInfo = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelCXInfo.setObjectName("labelCXInfo")
+        self.layoutInfo.addWidget(self.labelCXInfo)
+
+        self.labelMUTInfo = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelMUTInfo.setObjectName("labelMUTInfo")
+        self.layoutInfo.addWidget(self.labelMUTInfo)
+
+        self.labelPopSizeInfo = QtWidgets.QLabel(self.verticalLayoutWidget)
+        self.labelPopSizeInfo.setObjectName("labelPopSizeInfo")
+        self.layoutInfo.addWidget(self.labelPopSizeInfo)
+
+        self.labelGenerationsInfo = QtWidgets.QLabel('Ora fds', self.verticalLayoutWidget)
+        self.labelGenerationsInfo.setObjectName("labelGenerationsInfo")
+        self.layoutInfo.addWidget(self.labelGenerationsInfo)
+
+
+    def get_methods(self, file_path):
+        module_name = file_path.split('.')[0]
+        module = importlib.import_module(module_name)
+
+        methods = [name for name, obj in inspect.getmembers(module) if inspect.isfunction(obj)]
+        methods = [i for i in methods if i[:4] != "aux_"]
+
+        return methods
+
+    def remove_duplicates(self, input_list):
+        seen = set()
+        result = []
+        indices = []
+
+        for i, item in enumerate(input_list):
+            tuple_item = tuple(item)
+            if tuple_item not in seen:
+                result.append(item)
+                indices.append(i)
+                seen.add(tuple_item)
+
+        return result, indices
+
+
+    def clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+            else:
+                sub_layout = item.layout()
+                if sub_layout is not None:
+                    self.clear_layout(sub_layout)
+    
+    def disable_ea_algo_tab(self):
+
+        self.comboBoxMate.setDisabled(self.bb_mode)
+        self.comboBoxMutate.setDisabled(self.bb_mode)
+        self.comboBoxSelect.setDisabled(self.bb_mode)
+        self.comboBoxEvaluate.setDisabled(self.bb_mode)
+        self.comboBoxAlgo.setDisabled(self.bb_mode)
+        self.buttonInitPop.setDisabled(self.bb_mode)
+        self.buttonRegisterMethods.setDisabled(self.bb_mode)
+
+        return
+    
+
+class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
+
+    def __init__(self, parent=None):
+        QtWidgets.QWidget.__init__(self, parent)
+        Backend.__init__(self)
+        Ui_AS.__init__(self)
+        self.setupUi(self)
+
+    def setup_backend(self):
+
+        self.obj_class = Stock_Selection
+        self.setup_create_object()
+        self.setup_run_algorithm()
+        self.setup_choose_individual()
+
+        self.update_status()
+
+
+    def update_status(self):
+
+        self.status = 0
+
+        if hasattr(self, 'obj'):
+            self.status = 1
+            if hasattr(self.obj, 'pareto_front'):
+                self.status = 2
+                if hasattr(self.obj, 'final_prtf'):
+                    self.status = 3
+                else:
+                    self.text_for_plot('Choose a Valid Plot')
+            else:
+                self.text_for_plot("Run Algorithm")
+        else:
+            self.text_for_plot("Create an Asset Selection\n Object")
+        self.add_prtfs() 
+        self.populate_ss_layout()
+        self.disable_ea_algo_tab()
+
+        return
+    
+
+    def connect_algo_buttons(self):
+
+        self.buttonInitPop.clicked.connect(self.b_end_init_pop)
+        self.buttonRegisterMethods.clicked.connect(self.b_end_register_methods)
+        self.buttonRunAlgo.clicked.connect(self.b_end_run_algo)
+
+
+class Backend_PO(Backend, Ui_PO):
+
+
+    def setup_backend(self):
+
+        self.obj_class = Portfolio_Optimization
+        self.setup_create_object()
+        self.setup_run_algorithm()
+        self.setup_choose_individual()
+
+        self.update_status()
+
+
+    def update_status(self):
+
+        self.status = 0
+
+        if hasattr(self, 'obj'):
+            self.status = 1
+            if hasattr(self.obj, 'pareto_front'):
+                self.status = 2
+                if hasattr(self.obj, 'final_prtf'):
+                    self.status = 3
+                else:
+                    self.text_for_plot('Choose a Valid Plot')
+            else:
+                self.text_for_plot("Run Algorithm")
+        else:
+            self.text_for_plot("Create an Asset Selection\n Object")
+        self.add_prtfs() 
+        self.populate_ss_layout()
+        self.disable_ea_algo_tab()
+
+        return
+    
+    def connect_algo_buttons(self):
+
+        self.buttonInitPop.clicked.connect(self.b_end_init_pop)
+        self.buttonRegisterMethods.clicked.connect(self.b_end_register_methods)
+        self.buttonRunAlgo.clicked.connect(self.b_end_run_algo)
+        self.buttonImportAssetsPRTF.clicked.connect(lambda: self.b_end_import_assets('pkl'))
+        self.buttonImportAssetsJSON.clicked.connect(lambda: self.b_end_import_assets('json'))
+
+    def b_end_import_assets(self, ftype):
+
+        if self.status == 1:
+
+            options = QtWidgets.QFileDialog.Options()
+
+            current_dir = os.getcwd()
+            if ftype == 'pkl':
+                dir = os.path.join(*[current_dir, c.prtf_folder, c.po_folder])
+            if ftype == 'json':
+                dir = os.path.join(*[current_dir, c.prtf_folder, c.assets_folder])
+            filePath, _ = QtWidgets.QFileDialog.getOpenFileName(None, "Open File", dir, "Pickle Files (*.pkl)", options=options)
+
+            if filePath is None:
+                return
+
+            if ftype == 'pkl':
+                self.obj.get_assets(pkl_filename = filePath)
+            if ftype == 'json':
+                self.obj.get_assets(json_filename = filePath)
+
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Backend()
+    ui.setup_main_tab(MainWindow)
+    # ui.setupUi(MainWindow)
+    # ui.setup_backend_as()
+    MainWindow.show()
+    sys.exit(app.exec_())
