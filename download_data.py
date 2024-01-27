@@ -15,6 +15,8 @@ from index import SP500, DAX40
 from datetime import datetime, date
 from urllib.request import Request, urlopen
 
+logger = logging.getLogger(__name__)
+
 
 #####
 #Remove all columns from the ticker's dataframe except the ones from the initial quotes dataframe
@@ -40,7 +42,7 @@ def update_historical_data(index, assets = None):
     i = 0
     for tic in assets:
         to_save_filename = op.get_path(index.name, 'H', tic + c.filetype)
-        logging.info('The next asset is: %s', tic)
+        logger.info('The next asset is: %s', tic)
 
         if os.path.exists(to_save_filename):                                        #If the file exists
 
@@ -52,7 +54,7 @@ def update_historical_data(index, assets = None):
             last_date += dt.timedelta(days=1)                                       #Increments 1 day
 
             if last_date < date_today:                                                                  #If today's date is after last
-                logging.info('Asset %s will be updated.', tic)                                              #date in file, then update file
+                logger.info('Asset %s will be updated.', tic)                                              #date in file, then update file
                 new_data = yf.download(tic, start = last_date, end = date_today, interval = '1d')       #Download new data
 
                 if len(new_data) > 0:                                               #If downloaded data is not null
@@ -61,18 +63,17 @@ def update_historical_data(index, assets = None):
                     new_df.reset_index(inplace = True, drop = True)
                     new_df.to_csv(to_save_filename, index = False)                #Save to csv
             else:
-                logging.info('No update available for %s.', tic)                               #If there is no update for this asset
+                logger.info('No update available for %s.', tic)                               #If there is no update for this asset
 
         else:   
-            print(tic, 'is new')
             start = time.time()                                                            #In case the file does not exists
             data = yf.download(tic, period = 'max', interval = '1d')        #Download data from yfinance
             data = data_index_to_date(data)                                 
             data = data.iloc[:-1]                                           #Remove last row - may not be a complete day     
             data.to_csv(to_save_filename, index = False)                  #Save to csv
             end = time.time()
-            logging.debug(end - start)
-        logging.debug(i)
+            logger.debug(end - start)
+        logger.debug(i)
         i +=1
 
 
@@ -97,7 +98,7 @@ def get_financials(index, assets = None):
 
     for asset in assets:
         
-        logging.info('Downloading financials from %s', asset)
+        logger.info('Downloading financials from %s', asset)
 
         filepath = op.get_path('SP500', 'F', asset + c.filetype)
         if os.path.exists(filepath):
@@ -127,8 +128,6 @@ def get_financials(index, assets = None):
                     element_list = row.find_all('div', class_='D(tbc)')
                     value = [element.text for element in element_list]
 
-                    '''if len(value) == 5:
-                        value.insert(1, None)'''
                     list_of_lists[idx] = value
 
                 list_of_lists = [list(row) for row in zip(*list_of_lists)]  
@@ -145,16 +144,16 @@ def get_financials(index, assets = None):
             
         df.to_csv(filepath)
 
-        logging.info('Financials from %s saved.', asset)
+        logger.info('Financials from %s saved.', asset)
 
     return
 
 if __name__ == '__main__':
 
-    sp = SP500()
-    update_historical_data(sp)
-    get_financials(sp)
+    # sp = SP500()
+    # update_historical_data(sp)
+    # get_financials(sp)
 
     dax = DAX40()
-    update_historical_data(dax)
-    get_financials(dax)
+    update_historical_data(dax, ['^GDAXI'])
+    # get_financials(dax)

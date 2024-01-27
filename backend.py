@@ -23,7 +23,7 @@ from deap import base
 from deap import creator
 from deap import tools
 
-from stock_selection import Stock_Selection
+from asset_selection import Asset_Selection
 from portfolio_optimization import Portfolio_Optimization
 
 from main_tab import Ui_MainWindow
@@ -47,7 +47,7 @@ class Backend():
     def setup_choose_individual(self):
         self.populate_combo_box_choose_plot()
         self.buttonPlot.clicked.connect(self.get_plot)
-        self.checkBoxSimplified.stateChanged.connect(self.add_prtfs)
+        self.checkBoxSimplified.stateChanged.connect(self.update_checkbox_prtfs)
         self.comboBoxChoosePlot.currentIndexChanged.connect(self.combo_choose_plot_changed)
         self.buttons_final_prtf()
   
@@ -191,39 +191,46 @@ class Backend():
 
     def connect_object_buttons(self):
         self.buttonCreateObject.clicked.connect(self.create_object)
-        self.buttonImportObject.clicked.connect(self.import_asset_selection)
-        self.buttonDeleteObject.clicked.connect(self.delete_asset_selection)
-        self.buttonSaveObject.clicked.connect(self.save_asset_selection)
+        self.buttonImportObject.clicked.connect(self.import_object)
+        self.buttonDeleteObject.clicked.connect(self.delete_object)
+        self.buttonSaveObject.clicked.connect(self.save_object)
+
 
     def clear_list_prtfs(self):
             
             self.comboBoxListAssets.clear()
             self.comboBoxListAssets.addItem("Select Portfolio")
     
-    def add_prtfs(self):
-      
-        
+
+    def update_checkbox_prtfs(self):
+
+        self.clear_list_prtfs()
         if self.status >= 2:
 
-            if self.checkBoxSimplified.isChecked():
-                if self.comboBoxListAssets.count() > 4:
-                    self.clear_list_prtfs()
-                self.prtfs_on_display = [self.obj.pareto_front[i] 
-                               for i in [0, len(self.obj.pareto_front)//2, -1]]
-                aux = [i.asset_list for i in self.prtfs_on_display]
-            else:
-                if self.comboBoxListAssets.count() == 4:
-                    self.clear_list_prtfs()
-                asset_lists = [i.asset_list for i in self.obj.pareto_front]
-                aux, ids = self.remove_duplicates(asset_lists)
-                self.prtfs_on_display = [self.obj.pareto_front[i] for i in ids]
+            self.update_prtfs_on_display()
 
-            for i in aux:
-                self.comboBoxListAssets.addItem(str(list(i)))
+            for i in self.prtfs_on_display:
+                if isinstance(self, Backend_AS):
+                    self.comboBoxListAssets.addItem(str(list(i.asset_list)))
+                else:
+                    self.comboBoxListAssets.addItem(str(list(i.asset_weights)))
+
+
+    def update_prtfs_on_display(self):
+
+        if self.checkBoxSimplified.isChecked():
+            self.prtfs_on_display = [self.obj.pareto_front[i] for i in [0, len(self.obj.pareto_front)//2, -1]]
         else:
-            self.clear_list_prtfs()
 
-    
+            if isinstance(self, Backend_AS):
+                aux_list = [i.asset_list for i in self.obj.pareto_front]
+            else:
+                aux_list = [i.asset_weights for i in self.obj.pareto_front]
+
+            _, ids = self.remove_duplicates(aux_list)
+            self.prtfs_on_display = [self.obj.pareto_front[i] for i in ids]
+
+
     def get_plot(self):
         
         if self.status >= 2:
@@ -273,15 +280,15 @@ class Backend():
 
         for ind in self.obj.pareto_front:
 
-            df_to_plot = self.get_prtf_return_df(ind)
+            df_to_plot = ind.get_prtf_return_df()
             ax.plot(df_to_plot.index, df_to_plot.values, alpha = alpha)
 
         if selected_ind:
-            df_to_plot = self.get_prtf_return_df(selected_ind)
+            df_to_plot = selected_ind.get_prtf_return_df()
             ax.plot(df_to_plot.index, df_to_plot.values, color = 'black', linewidth=2.0, label = 'Selected Portfolio')
 
         if final_prtf:
-            df_to_plot = self.get_prtf_return_df(final_prtf)
+            df_to_plot = final_prtf.get_prtf_return_df()
             ax.plot(df_to_plot.index, df_to_plot.values, color = '#ff0000', linewidth=2.0, label = 'Final Portfolio')
            
         ax.set_xlabel('X Axis Label')
@@ -291,14 +298,6 @@ class Backend():
         ax.grid(True)
 
         return   
-
-    def get_prtf_return_df(self, ind):
-
-        df = ind.prtf_df.copy()
-        df.set_index('Date', inplace=True)
-        df = df / df.iloc[0] * 100
-        return df.dot(ind.asset_weights)   
-
 
     def plot_asset_returns(self, ax):
 
@@ -319,21 +318,23 @@ class Backend():
         ax.grid(True)
         ax.legend()
 
-    def remove_bounds(self):
+    # def remove_bounds(self):
 
-        if not self.checkBoxBoundaries.isChecked():
-            return self.obj.pareto_fronts
-        else:
-            min_values = [self.spinMinX.value(), self.spinMinY.value()]
-            max_values = [self.spinMaxX.value(), self.spinMaxY.value()]
-            arr_list = [None] * len(self.obj.pareto_fronts)
-            for idx, arr in enumerate(self.obj.pareto_fronts):
-                arr_list[idx] = np.array([i for i in arr if all(min_v <= val <= max_v for val, (min_v, max_v) in zip(i, zip(min_values, max_values)))])
-            return arr_list
+    #     if not self.checkBoxBoundaries.isChecked():
+    #         return self.obj.pareto_fronts
+    #     else:
+    #         min_values = [self.spinMinX.value(), self.spinMinY.value()]
+    #         max_values = [self.spinMaxX.value(), self.spinMaxY.value()]
+    #         arr_list = [None] * len(self.obj.pareto_fronts)
+    #         for idx, arr in enumerate(self.obj.pareto_fronts):
+    #             arr_list[idx] = np.array([i for i in arr if all(min_v <= val <= max_v for val, (min_v, max_v) in zip(i, zip(min_values, max_values)))])
+    #         return arr_list
 
     def plot_MO(self, ax):
 
-        arr_list = self.remove_bounds()
+        min_values = [self.spinMinX.value(), self.spinMinY.value()]
+        max_values = [self.spinMaxX.value(), self.spinMaxY.value()]
+        arr_list = self.obj.remove_bounds(self.checkBoxBoundaries.isChecked(), min_values, max_values)
 
         for idx, arr in enumerate(arr_list):
             if idx == len(arr_list) - 1:
@@ -394,16 +395,16 @@ class Backend():
             objectives = (1, -1)
         MUTPB, CXPB = self.doubleSpinMUT.value(), self.doubleSpinCX.value()
         pop_size, generations = self.spinPopSize.value(), self.spinGenerations.value()
-        START_DATE, END_DATE = str(self.startDateSelect.date().toPyDate()), str(self.endDateSelect.date().toPyDate())
+        start_date, end_date = str(self.startDateSelect.date().toPyDate()), str(self.endDateSelect.date().toPyDate())
         indexes = self.get_selected_indexes()
 
-        return indexes, PRTF_SIZE, objectives, START_DATE, END_DATE, CXPB, MUTPB, pop_size, generations, bb_filepath
+        return indexes, PRTF_SIZE, objectives, start_date, end_date, CXPB, MUTPB, pop_size, generations, bb_filepath
 
     def create_object(self):
 
         if self.status > 0:
 
-            print('Please delete the previous  object first.')
+            print('Please delete the previous object first.')
         
         else:
 
@@ -411,47 +412,63 @@ class Backend():
             indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations, bb_filepath = self.get_selected_inputs()
 
             if self.bb_mode:
-                self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, black_box_filepath = bb_filepath)
+                self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, bb_path = bb_filepath)
             else:
                 self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations)
 
             self.update_status()
             self.buttonCreateObject.setEnabled(True)  # Re-enable the button
 
-    def delete_asset_selection(self):
+    def delete_object(self):
 
         if self.status >= 1:
-            self.obj.delete_creator_individual()
             delattr(self, 'obj')
             self.update_status()
         else:
             # TODO: POPUP
             print('There is no Stock Selection object')
 
-    def import_asset_selection(self):
+    def import_object(self):
 
         if self.status >= 1:
 
             print('Please delete the previous  object first.')
         
         else:
-            options = QtWidgets.QFileDialog.Options()
 
             current_dir = os.getcwd()
             if isinstance(self, Ui_AS):
                 dir = os.path.join(*[current_dir, c.prtf_folder, c.as_folder])
             elif isinstance(self, Ui_PO):
                 dir = os.path.join(*[current_dir, c.prtf_folder, c.po_folder])
-            filePath, _ = QtWidgets.QFileDialog.getOpenFileName(None, "Open File", dir, "Pickle Files (*.pkl)", options=options)
-            file_no_extension = os.path.splitext(os.path.basename(filePath))[0]
-
-            obj = self.obj_class()
-            self.obj = obj.read_pickle(file_no_extension)
-            self.update_status()
             
-    def save_asset_selection(self):
+            # options = QtWidgets.QFileDialog.Options()
+            # filePath, _ = QtWidgets.QFileDialog.getOpenFileName(None, "Open File", dir, "Pickle Files (*.pkl)", options=options)
+            # file_no_extension = os.path.splitext(os.path.basename(filename))[0]
+            filename, _ = self.open_file_dialog(dir, "Pickle Files (*.pkl)")
 
-        self.obj.save_pickle()
+            if filename is None:
+                self.show_popup('question', 'Ora boa Tarde')
+                return
+            
+            self.obj = self.obj_class(filename = filename)
+            self.update_status()
+
+
+    def open_file_dialog(self, initial_dir, filetype):
+
+        options = QtWidgets.QFileDialog.Options()
+        filePath, _ = QtWidgets.QFileDialog.getOpenFileName(None, "Open File", initial_dir, filetype, options=options)
+
+        if filePath:
+            filename, extension = os.path.splitext(os.path.basename(filePath))
+            return filename, extension
+        else:
+            return None, None
+
+    def save_object(self):
+
+        self.obj.save_to_pickle()
         return
 
     def populate_ss_layout(self):
@@ -465,10 +482,10 @@ class Backend():
             self.labelIdxs.setText("Indexes: " + str(list(self.obj.indexes.keys())))
             self.labelPrtfSizeInfo.setText("Portfolio Size: " + str(self.obj.PRTF_SIZE))
             self.labelObjectiveWeights.setText("Objective Weights: " + str(self.obj.objectives))
-            self.labelStartDateInfo.setText("Start Date: " + self.obj.START_DATE)
-            self.labelEndDateInfo.setText("End Date: " + self.obj.END_DATE)
+            self.labelStartDateInfo.setText("Start Date: " + self.obj.start_date)
+            self.labelEndDateInfo.setText("End Date: " + self.obj.end_date)
             if self.bb_mode:
-                self.labelBBPath.setText("Black-box Filepath: " + str(self.obj.black_box_filepath))
+                self.labelBBPath.setText("Black-box Filepath: " + str(self.obj.bb_path))
             else:
                 self.labelCXInfo.setText("Crossover Probability: " + str(self.obj.CXPB))
                 self.labelMUTInfo.setText("Mutation Probability: " + str(self.obj.MUTPB))
@@ -600,6 +617,33 @@ class Backend():
 
         return
     
+    def show_popup(self, message_type, message):
+        """
+        Shows a popup message of a specified type.
+
+        :param message_type: The type of the message (e.g., 'info', 'warning', 'critical', 'question').
+        :param message: The message to display in the popup.
+        """
+        msg = QtWidgets.QMessageBox()
+        msg.setText(message)
+        
+        if message_type == 'info':
+            msg.setIcon(QtWidgets.QMessageBox.Information)
+            msg.setWindowTitle("Information")
+        elif message_type == 'warning':
+            msg.setIcon(QtWidgets.QMessageBox.Warning)
+            msg.setWindowTitle("Warning")
+        elif message_type == 'critical':
+            msg.setIcon(QtWidgets.QMessageBox.Critical)
+            msg.setWindowTitle("Critical")
+        elif message_type == 'question':
+            msg.setIcon(QtWidgets.QMessageBox.Question)
+            msg.setWindowTitle("Question")
+        else:
+            msg.setIcon(QtWidgets.QMessageBox.NoIcon)
+            msg.setWindowTitle("Message")
+
+        msg.exec_()
 
 class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
@@ -611,35 +655,52 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
     def setup_backend(self):
 
-        self.obj_class = Stock_Selection
+        self.obj_class = Asset_Selection
         self.setup_create_object()
         self.setup_run_algorithm()
         self.setup_choose_individual()
 
+        self.status = 0
         self.update_status()
 
 
     def update_status(self):
 
-        self.status = 0
-
+        previous_state = self.status
         if hasattr(self, 'obj'):
             self.status = 1
             if hasattr(self.obj, 'pareto_front'):
                 self.status = 2
                 if hasattr(self.obj, 'final_prtf'):
                     self.status = 3
-                else:
-                    self.text_for_plot('Choose a Valid Plot')
-            else:
-                self.text_for_plot("Run Algorithm")
-        else:
-            self.text_for_plot("Create an Asset Selection\n Object")
-        self.add_prtfs() 
+        else: 
+            self.status = 0
+        #         else:
+        #             self.text_for_plot('Choose a Plot')
+        #     else:
+        #         self.text_for_plot("Run Algorithm")
+        # else:
+        #     self.text_for_plot("Create an Asset Selection\n Object")
+
+        if not (previous_state == 3 and self.status == 2):
+            self.update_plot_text()
+
+        if not ((previous_state == 3 and self.status == 2) or (previous_state == 2 and self.status == 3)):
+            self.update_checkbox_prtfs() 
+
         self.populate_ss_layout()
         self.disable_ea_algo_tab()
 
         return
+    
+    def update_plot_text(self):
+
+        if self.status == 0:
+            self.text_for_plot("Create an Asset Selection\n Object")
+            if self.status == 1:
+                self.text_for_plot("Run Algorithm")
+                if self.status == 2:
+                    self.text_for_plot('Choose a Plot')
     
 
     def connect_algo_buttons(self):
@@ -659,31 +720,49 @@ class Backend_PO(Backend, Ui_PO):
         self.setup_run_algorithm()
         self.setup_choose_individual()
 
+        self.status = 0
         self.update_status()
 
 
     def update_status(self):
 
-        self.status = 0
-
+        previous_state = self.status
         if hasattr(self, 'obj'):
             self.status = 1
             if hasattr(self.obj, 'pareto_front'):
                 self.status = 2
                 if hasattr(self.obj, 'final_prtf'):
                     self.status = 3
-                else:
-                    self.text_for_plot('Choose a Valid Plot')
-            else:
-                self.text_for_plot("Run Algorithm")
         else:
-            self.text_for_plot("Create an Asset Selection\n Object")
-        self.add_prtfs() 
+            self.status = 0
+        #         else:
+        #             self.text_for_plot('Choose a Plot')
+        #     else:
+        #         self.text_for_plot("Run Algorithm")
+        # else:
+        #     self.text_for_plot("Create an Asset Selection\n Object")
+
+        if not (previous_state == 3 and self.status == 2):
+            self.update_plot_text()
+
+        if not ((previous_state == 3 and self.status == 2) or (previous_state == 2 and self.status == 3)):
+            self.update_checkbox_prtfs() 
+
         self.populate_ss_layout()
         self.disable_ea_algo_tab()
 
         return
     
+    def update_plot_text(self):
+
+        if self.status == 0:
+            self.text_for_plot("Create an Asset Selection\n Object")
+            if self.status == 1:
+                self.text_for_plot("Run Algorithm")
+                if self.status == 2:
+                    self.text_for_plot('Choose a Plot')
+
+
     def connect_algo_buttons(self):
 
         self.buttonInitPop.clicked.connect(self.b_end_init_pop)
@@ -696,22 +775,23 @@ class Backend_PO(Backend, Ui_PO):
 
         if self.status == 1:
 
-            options = QtWidgets.QFileDialog.Options()
-
             current_dir = os.getcwd()
             if ftype == 'pkl':
-                dir = os.path.join(*[current_dir, c.prtf_folder, c.po_folder])
+                dir = os.path.join(*[current_dir, c.prtf_folder, c.as_folder])
+                extension = "Pickle Files (*.pkl)"
             if ftype == 'json':
                 dir = os.path.join(*[current_dir, c.prtf_folder, c.assets_folder])
-            filePath, _ = QtWidgets.QFileDialog.getOpenFileName(None, "Open File", dir, "Pickle Files (*.pkl)", options=options)
-
-            if filePath is None:
+                extension = "JSON Files (*.json)"
+                
+            filename, _ = self.open_file_dialog(dir, extension)
+            if filename is None:
+                print('Please choose a valid file.')
                 return
-
-            if ftype == 'pkl':
-                self.obj.get_assets(pkl_filename = filePath)
-            if ftype == 'json':
-                self.obj.get_assets(json_filename = filePath)
+            
+            if 'pkl' in extension:
+                self.obj.get_assets(pkl_filename = filename)
+            if 'json' in extension:
+                self.obj.get_assets(json_filename = filename)
 
 
 

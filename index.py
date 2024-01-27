@@ -1,28 +1,34 @@
-from ticker import SP_Ticker, DAX_Ticker
+from ticker import Asset, SP_Ticker, DAX_Ticker
 import data_op as op
 import config as c
 import pandas as pd
 
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 import requests
 
 class Index:
 
-    name = 'index'
-
-    def get_asset(self, asset_name):
+    def get_asset(self):
         print('This method is not yet developed.') 
     
-
     #####
     #Creates a dictionary where all the Ticker objects
     #Can be saved and accessed
     #####
     def create_dict(self):
 
-        #Dictionary a zip with ticker names and an empty list
+        #Zip the asset list with None values that are future asset objects
         zipped = zip(self.asset_list, [None] * len(self.asset_list))
+        #Return the zip as a dictionary
         return dict(zipped)
+    
+
+    #####
+    #Returns all the assets from the index
+    #####
+    def get_all_assets(self):
+
+        return []
 
     def __init__(self):
 
@@ -33,6 +39,8 @@ class Index:
         return len(self.asset_list)
 
     def __getitem__(self, i):
+        if self.asset_dict[i] is None:
+            self.get_asset(i)
         return self.asset_dict[i]
     
     def __iter__(self):
@@ -46,6 +54,7 @@ class Index:
 class SP500(Index):
 
     name = 'SP500'
+    name_asset_index = '^GSPC'
 
     #####
     #Update list of all S&P500 tickers
@@ -92,11 +101,12 @@ class SP500(Index):
         path = op.get_path('SP500', filename = 'sp500tickers' + c.filetype)
         tickers_df = pd.read_csv(path)
         tickers = tickers_df['S&P500'].tolist()
-        to_remove = ['ABNB', 'CARR', 'CEG', 'CTVA', 'GEHC', 'KVUE', 'OGN', 'OTIS', 'ALLE', 
-                     'ANET', 'CZR', 'CTLT', 'CDAY', 'CFG', 'DOW', 'ETSY', 'FTV', 'FOXA', 
-                     'FOX', 'HPE', 'HLT', 'HWM', 'IR', 'INVH', 'KEYS', 'KHC', 'LW', 'MRNA',
-                     'PAYC', 'PYPL', 'QRVO', 'SEDG', 'SYF', 'VICI', 'WRK']
-        
+        to_remove = ['ABBV', 'ABNB', 'ALLE', 'AMCR', 'APTV', 'ANET', 'CZR', 'CARR', 'CTLT', 'CBOE', 
+                     'CDW', 'CDAY', 'CHTR', 'CFG', 'CEG', 'CTVA', 'FANG', 'DOW', 'ENPH', 'EPAM', 'ETSY', 
+                     'FLT', 'FTV', 'FOXA', 'FOX', 'GEHC', 'GNRC', 'GM', 'HCA', 'HPE', 'HLT', 'HWM', 'HII', 
+                     'IR', 'INVH', 'IQV', 'KVUE', 'KEYS', 'KMI', 'KHC', 'LW', 'LYB', 'MPC', 'META', 'MRNA', 
+                     'NWSA', 'NWS', 'NCLH', 'NXPI', 'OGN', 'OTIS', 'PANW', 'PAYC', 'PYPL', 'PSX', 'QRVO', 
+                     'NOW', 'SEDG', 'SYF', 'TRGP', 'TSLA', 'VICI', 'WRK', 'XYL', 'ZTS']       
 
         return [tic for tic in tickers if tic not in to_remove]
 
@@ -109,6 +119,7 @@ class SP500(Index):
 class DAX40(Index):
 
     name = 'DAX40'
+    name_asset_index = '^GDAXI'
 
     def download_asset_tickers(self):
 
@@ -145,7 +156,7 @@ class DAX40(Index):
         assets_df = pd.read_csv(path)
         assets = assets_df[self.name].tolist()
 
-        to_remove = ['CON.DE', 'P911.DE']
+        to_remove = ['CON.DE', 'P911.DE', 'SHL.DE', 'DTG.DE', 'ENR.DE', 'BNR.DE', '1COV.DE', 'VNA.DE', 'ZAL.DE']
         return [tic for tic in assets if tic not in to_remove]
 
     def __init__(self):

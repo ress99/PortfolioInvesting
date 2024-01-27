@@ -4,3 +4,4 @@ Portfolios/
 __pycache__/
 *.ui
 launch.json
+main.py

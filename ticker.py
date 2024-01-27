@@ -9,10 +9,18 @@ class Asset:
     #Reads the data from the csv file and
     #Saves it in self.data
     #####
-    def save_hist_data(self):
+    def save_hist_data(self, all_data = False):
 
-        data = pd.read_csv(self.filename)                              
-        data['Date'] = pd.to_datetime(data['Date']).dt.date                    
+        data = pd.read_csv(self.filename)   
+
+        if all_data is False:
+            first_day = c.first_day
+        else:
+            first_day = '1900-01-01'
+
+        data = data.loc[data['Date'] > first_day]         
+        data.reset_index(drop = True)  
+        data['Date'] = pd.to_datetime(data['Date']).dt.date     
 
         return data
     
@@ -38,10 +46,22 @@ class Asset:
             data.drop(columns = ['Date'], inplace = True)
 
         return data
+  
+    def get_price(self, date, column = None):
+
+        #Get original data with all or one column
+        if column == None:
+            data = self.data
+        elif column in op.quote_columns:
+            data = self.data[['Date', column]]  
+        else:
+            print('Column not available')
+
+        return op.get_price_on_date(data, date)
 
 
     #####
-    #Returns the stock return between start_date and end_date
+    #Returns the asset return between start_date and end_date
     #If these are not specified, the first and last day are used
     #The column on which to calculate the returns can also be specified.
     #It is set as 'Close' by default
@@ -68,6 +88,17 @@ class Asset:
 
         return asset_return
 
+    @property
+    def first_day(self):
+        return self.self.data.iloc[0]['Date']
+
+    @property
+    def last_day(self):
+        return self.data.iloc[-1]['Date']
+
+    @property
+    def total_days(self):
+        return (self.last_day - self.first_day).days
 
 
 #####
@@ -75,6 +106,8 @@ class Asset:
 #And used to calculate various stock-related indicators
 #####
 class SP_Ticker(Asset):
+
+    index = 'SP500'
 
     #####
     #Reads the data from the csv file and
@@ -101,14 +134,9 @@ class SP_Ticker(Asset):
     def __init__(self, ticker_name, fin_data = False):
 
         #Initializes ticker parameters
-        self.index = 'SP500'
         self.ticker_name = ticker_name
         self.filename = op.get_path(self.index, 'H', self.ticker_name + c.filetype)
         self.data = self.save_hist_data()
-        # self.selected_data = self.data.copy()
-        self.first_day = self.data.iloc[0]['Date']
-        self.last_day = self.data.iloc[-1]['Date']
-        self.total_days = (self.last_day - self.first_day).days
         if fin_data:
             self.fdata = self.save_fin_data()
 
@@ -139,14 +167,12 @@ class SP_Ticker(Asset):
 
 class DAX_Ticker(Asset):
     
+    index = 'DAX40'
+
     def __init__(self, ticker_name):
 
         #Initializes ticker parameters
-        self.index = 'DAX40'
+        
         self.ticker_name = ticker_name
         self.filename = op.get_path(self.index, 'H', self.ticker_name + c.filetype)
         self.data = self.save_hist_data()
-        # self.selected_data = self.data.copy()
-        self.first_day = self.data.iloc[0]['Date']
-        self.last_day = self.data.iloc[-1]['Date']
-        self.total_days = (self.last_day - self.first_day).days

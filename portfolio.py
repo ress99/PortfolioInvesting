@@ -2,54 +2,75 @@ import numpy as np
 import pandas as pd
 import time
 import config as c
+from fitness import Fitness
 import logging
 import data_op as op
 import datetime as dt
 import json
 import os
+from cachetools import LRUCache
+
+logger = logging.getLogger(__name__)
 
 class Portfolio:
+
+    cache = LRUCache(maxsize=5000)
+    _ct = 0
+    times = 0
+    combinations_dict = {}
 
     #####
     #Normalizes the weights of all portfolio tickets
     #####
     def normalize_asset_weights(self):
 
-        logging.info('Normalizing the weights of the Portfolio.')
+        logger.info('Normalizing the weights of the Portfolio.')
         weight_sum = sum(self.asset_weights)
-        logging.debug('The sum of the weights is %f', weight_sum)
+        logger.debug('The sum of the weights is %f', weight_sum)
         self.asset_weights = [x / weight_sum for x in self.asset_weights]
         self.asset_weights = np.asarray(self.asset_weights)
-        logging.info('Portfolio weights normalized.')
+        logger.info('Portfolio weights normalized.')
 
         return
     
+    def adjust_decimals(self, decimals = 4):
+
+        rounded = [round(num, decimals) for num in self.asset_weights]
+        diff = round(1 - sum(rounded), decimals)
+        max_value = max(rounded)
+        idx = rounded.index(max_value)
+        rounded[idx] = round(rounded[idx] + diff, decimals)
+        self.asset_weights = np.asarray(rounded)
+
+        return
+
+
     #####
     #Checks if all ticker weights are positive
     #####
     def check_positivity(self):
 
-        logging.info('Checking positivity of all weights of the Portfolio.')
+        logger.info('Checking positivity of all weights of the Portfolio.')
         for asset_name in self:
             weight = self[asset_name]['weight']
-            logging.debug('Asset %s has weight %f.', asset_name, weight)
+            logger.debug('Asset %s has weight %f.', asset_name, weight)
             if weight < 0:
-                logging.info('There are assets with negative weights.')
+                logger.info('There are assets with negative weights.')
                 return False
-        logging.info('All assets have positive weight.')
+        logger.info('All assets have positive weight.')
         return True 
 
     #####
     #
     def apply_positivity(self, remove = True, normalize = True):
         
-        logging.info('Applying positivity to the Portfolio weights.')
+        logger.info('Applying positivity to the Portfolio weights.')
         if not self.check_positivity():
             for asset_name in self:
                 weight = self[asset_name]['weight']
                 if weight < 0:
                     if remove:
-                        logging.debug('Removing asset %s with weight %d', asset_name, weight)
+                        logger.debug('Removing asset %s with weight %d', asset_name, weight)
                         self.prtf_dict = [asset_name]
                     else:
                         new_value = np.array([positive_value for positive_value in self.asset_weights if positive_value > 0]).mean()
@@ -59,50 +80,64 @@ class Portfolio:
 
 
     def change_asset_weight(self, asset_name, value):
+
+        logger.debug('Changing weight of asset %s to %f', asset_name, value)
         asset_name = asset_name.upper()
-        logging.info('Changing weight of ticker %s to %f', asset_name, value)
-        self._prtf_dict[asset_name]['weight'] = value
+        value_ = round(value, 4)
+        self._prtf_dict[asset_name]['weight'] = value_
 
 
-    def get_asset_object(self, asset_name):
+    def get_object(self, asset_name):
 
         asset_name = asset_name.upper()
         if asset_name in self:
             return self[asset_name]['object']
         else:
-            logging.warning('The asset %s is not in the Portfolio.', asset_name)
+            logger.warning('The asset %s is not in the Portfolio.', asset_name)
             return
+        
+    def get_index_portfolio(self, indexes, start_date = None, end_date = None):
 
+        if start_date is None:  
+            start_date = self.start_date
+        if end_date is None:  
+            end_date = self.end_date
+
+        assets = [i.name_asset_index for i in indexes]
+        prtf = Portfolio(indexes, cardinality_constraint= len(indexes), start_date = start_date, end_date =end_date)
+        prtf.prtf_dict = assets
+        prtf.apply_same_weights()
+        return prtf
+    
     def get_assets_same_df(self, column = 'Close', start_date = None, end_date = None):
 
-        lengths_list = [len(self.get_asset_object(asset).data) for asset in self]
+        start = time.perf_counter()
+        lengths_list = [len(self.get_object(asset).data) for asset in self]
         longest_index = lengths_list.index(max(lengths_list))
         longest_asset = self.asset_list[longest_index]
-        logging.debug('The longest asset is %s, with %d days.', longest_asset, max(lengths_list))
+        logger.debug('The longest asset is %s, with %d days.', longest_asset, max(lengths_list))
 
-        data = self.get_asset_object(longest_asset).data
+        data = self.get_object(longest_asset).data
         df = data['Date'].copy()
         df = df.to_frame()
 
         for asset in self:                                                         #For loop that passes all tickers
             
-            logging.debug('Adding %s to the dataframe', asset)
-            data = self.get_asset_object(asset).data                                                                 #For following tickers
+            logger.debug('Adding %s to the dataframe', asset)
+            data = self.get_object(asset).data                                                                 #For following tickers
             df = df.merge(data[['Date', column]], on = 'Date', how = self.merge_option)       #Merge dataframes with outer or inner
             df.rename(columns={column: asset}, inplace = True)
         
-        logging.info('All the %d assets added to the same dataframe with %s merge.', len(self), self.merge_option)
+        logger.info('All the %d assets added to the same dataframe with %s merge.', len(self), self.merge_option)
 
         df = op.df_start_to_end_date(df, start_date = start_date, end_date = end_date)
-        #df.set_index('Date', inplace=True)
-
+        Portfolio.times += time.perf_counter() - start
         return df
 
     def get_asset_index(self, asset):
 
         if asset not in self.all_assets:
-            logging.warning(('Asset %s not present in any of the indexes', asset))
-            return
+            logger.warning(('Asset %s not present in any of the indexes', asset))
         
         for i in self.indexes.values():
             if asset in i:
@@ -111,48 +146,48 @@ class Portfolio:
 
     def add(self, asset):
 
-        logging.info('Adding %s to Portfolio.', asset)
+        logger.info('Adding %s to Portfolio.', asset)
 
         if asset in self.all_assets:
             if asset not in self:
                 self.prtf_dict = [asset]
             else:
-                logging.warning('Asset %s is already in the Portfolio.', asset)                
+                logger.warning('Asset %s is already in the Portfolio.', asset)                
         else:
-            logging.warning('Asset %s does not exist.', asset)
+            logger.warning('Asset %s does not exist.', asset)
     
         return
 
     def remove(self, asset):
 
-        logging.info('Removing %s from Portfolio.', asset)
+        logger.info('Removing %s from Portfolio.', asset)
 
         if asset in self.all_assets:
             if asset in self:
                 self.prtf_dict = [asset]
             else:
-                logging.warning('Asset %s is not in the Portfolio.', asset)                
+                logger.warning('Asset %s is not in the Portfolio.', asset)                
         else:
-            logging.warning('Asset %s does not exist.', asset)
+            logger.warning('Asset %s does not exist.', asset)
     
         return
     
-    def substitute_assets(self, out_asset, in_asset):
+    def swap_assets(self, out_asset, in_asset):
 
         out_asset, in_asset = out_asset.upper(), in_asset.upper()
 
         if out_asset not in self.asset_list:
-            logging.warning('Asset %s does not exist in the Portfolio.', out_asset)
+            logger.warning('Asset %s does not exist in the Portfolio.', out_asset)
         elif in_asset in self.asset_list:
-            logging.warning('Asset %s already exists in the Portfolio.', in_asset)
+            logger.warning('Asset %s already exists in the Portfolio.', in_asset)
         elif in_asset not in self.all_assets:
-            logging.warning('Asset %s does not exist.', in_asset)
+            logger.warning('Asset %s does not exist.', in_asset)
             
         else:
             weight = self.prtf_dict[out_asset]['weight']
             self.prtf_dict = [out_asset, in_asset]
             self.change_asset_weight(in_asset, weight)
-            logging.info('Substituted %s for %s.', out_asset, in_asset)        
+            logger.info('Substituted %s for %s.', out_asset, in_asset)        
 
 
     def get_index(self, asset):
@@ -161,12 +196,20 @@ class Portfolio:
             if asset in self.indexes[i]:
                 return self.indexes[i]
         return None
+    
+
+    def apply_penalty(self):
+
+        multiplier = 1 + self.penalty
+        self.fitness.values = self.fitness.values * multiplier
+        self.penalty = 0
+
+        return   
 
 
     def __init__(self, indexes, cardinality_constraint = None, column = 'Close', start_date = None, end_date = None, merge_option = 'inner', filename = None):
 
-        logging.info('Initializing Portfolio object with %d stocks.', cardinality_constraint)
-
+        logger.info('Initializing Portfolio object with %d stocks.', cardinality_constraint)
         self._prtf_dict = dict()
         self.indexes = indexes
 
@@ -177,9 +220,11 @@ class Portfolio:
             self.cardinality_constraint = cardinality_constraint
             self.start_date = start_date
             self.end_date = end_date
-            #TODO mudar data quando for inner
+            # #TODO mudar data quando for inner
             self.merge_option = merge_option
             self.column = column
+            self.invalid = False
+            self.penalty = 0
 
     def __len__(self):
         return len(self._prtf_dict)
@@ -192,13 +237,21 @@ class Portfolio:
     
     def __str__(self):
         return str(self._prtf_dict)
-    
-    '''def __setitem__(self, key, value):
-        ticker_dict = {'object': key, 'weight': value}
-        self._prtf_dict[key] = ticker_dict'''
 
     def __delitem__(self, key):
         del self._prtf_dict[key]
+
+    @property
+    def fitness(self):
+        return self._fitness
+    
+    @fitness.setter
+    def fitness(self, objectives):
+        if isinstance(objectives, tuple):
+            self._fitness = Fitness(objectives)
+        else:
+            print("The variable is not a tuple.")
+        
 
     @property
     def prtf_dict(self):
@@ -212,19 +265,17 @@ class Portfolio:
 
             if asset in self:                            #If it's already in the portfolio
                 del self._prtf_dict[asset]
-                logging.info('Asset %s removed from Portfolio', asset)
+                logger.info('Asset %s removed from Portfolio', asset)
             
-            elif asset in self.all_assets:                                        #If it exists in the sp500
+            elif asset in self.all_assets:                                        #If it exists in the index
                 index = self.get_asset_index(asset)
-                if index[asset] is None:                                  #If not saved in the sp500 class
-                    index.get_asset(asset)                                          #Save it
-                ticker_dict = dict()                                                    #Create new dictionary and save it under tic key
+                ticker_dict = dict()                                                    #Create new dictionary and save it
                 ticker_dict = {'object': index[asset], 'weight': -1}
                 self._prtf_dict[asset] = ticker_dict
-                logging.info('Asset %s added to Portfolio', asset)
+                logger.info('Asset %s added to Portfolio', asset)
             
             else:
-                logging.warning('Asset %s does not exist in the S&P500', asset)
+                logger.warning('Asset %s does not exist in the S&P500', asset)
 
         return
 
@@ -245,35 +296,50 @@ class Portfolio:
 
     @property
     def asset_list(self):
-        return list(self.prtf_dict.keys())
+        return list(self._prtf_dict.keys())
 
     @property
     def nmbr_stocks(self):
-        return len(self.prtf_dict)
+        return len(self._prtf_dict)
 
     @property
     def asset_weights(self):
         weights_list = []
-        for ticker in self.prtf_dict:
-            weight = self.prtf_dict[ticker]['weight']
+        for ticker in self._prtf_dict:
+            weight = self._prtf_dict[ticker]['weight']
             weights_list.append(weight)
         return weights_list
 
     @asset_weights.setter
     def asset_weights(self, new_weights):
-        logging.info('Getting new ticker weights.')
+        logger.info('Getting new ticker weights.')
         if len(new_weights) == self.nmbr_stocks:
             for idx, tic in enumerate(self.asset_list):
                 self.change_asset_weight(tic, new_weights[idx])
         else:
-            logging.warning('The new weights do not match the number of stocks in the Portfolio.')
+            logger.warning('The new weights do not match the number of stocks in the Portfolio.')
 
     @property
     def prtf_df(self):
         
-        return self.get_assets_same_df(column = 'Close', 
+        key = tuple(self.setts)
+
+        if key not in Portfolio.cache:
+            dataframe = self.get_assets_same_df(column = 'Close', 
                                        start_date = self.start_date, 
                                        end_date=self.end_date)
+            Portfolio.cache[key] = dataframe
+
+        return Portfolio.cache[key]
+
+        # return self.get_assets_same_df(column = 'Close', 
+        #                                start_date = self.start_date, 
+        #                                end_date=self.end_date)
+
+    @property
+    def setts(self):
+        return [tuple(sorted(self.asset_list)), 'Close', self.start_date, self.end_date]
+
     @property
     def column(self):
         return self._column
@@ -295,11 +361,11 @@ class Portfolio:
         how_merge_list = ['inner', 'outer']  
 
         if merge not in how_merge_list:
-            logging.warning('The merge option %s is not valid. Will be set to default: \'inner\'', merge)
+            logger.warning('The merge option %s is not valid. Will be set to default: \'inner\'', merge)
             self._merge_option = 'inner'
         else:
             self._merge_option = merge
-            logging.info('The merge option is set to %s.', merge)
+            logger.info('The merge option is set to %s.', merge)
         return
     
     @property
@@ -309,9 +375,9 @@ class Portfolio:
     @start_date.setter
     def start_date(self, date):
 
-        logging.info('Setting the start date')
-        self._start_date = op.date_str_to_dt(date)
-        logging.info('Start date set as %s', self._start_date)
+        logger.info('Setting the start date')
+        self._start_date = date
+        logger.info('Start date set as %s', self._start_date)
     
     @property
     def end_date(self):
@@ -320,9 +386,9 @@ class Portfolio:
     @end_date.setter
     def end_date(self, date):
     
-        logging.info('Setting the end date')
-        self._end_date = op.date_str_to_dt(date)
-        logging.info('End date set as %s', self._end_date)
+        logger.info('Setting the end date')
+        self._end_date = date
+        logger.info('End date set as %s', self._end_date)
     
     def prtf_to_dict(self):
 
@@ -367,20 +433,20 @@ class Portfolio:
     ###Constraints
     def checks_cardinality(self):
         
-        logging.info('Checking cardinality.')
+        logger.info('Checking cardinality.')
         if self.cardinality_constraint is None:
-            logging.info('The Portfolio checks the cardinality constraint.')
+            logger.info('The Portfolio checks the cardinality constraint.')
             return True
         if self.nmbr_stocks > self.cardinality_constraint:
-            logging.warning('There are %d stocks in the Portfolio, instead of the maximum of %d', self.nmbr_stocks, self.cardinality_constraint)
+            logger.warning('There are %d stocks in the Portfolio, instead of the maximum of %d', self.nmbr_stocks, self.cardinality_constraint)
             return False
         
-        logging.info('The Portfolio checks the cardinality constraint.')
+        logger.info('The Portfolio checks the cardinality constraint.')
         return True
 
     def apply_cardinality(self):
 
-        logging.info('Applying cardinality constraint.')
+        logger.info('Applying cardinality constraint.')
         while not self.checks_cardinality():
             array_asset_weights = np.array(self.asset_weights)
             idx = np.argmin(array_asset_weights)
@@ -388,31 +454,76 @@ class Portfolio:
 
     def apply_same_weights(self):
 
-        logging.info('Applying same weights to the Portfolio.')
+        logger.info('Applying same weights to the Portfolio.')
         new_weights = [1/self.nmbr_stocks] * self.nmbr_stocks
-        logging.debug('The new weights are %s', str(new_weights))
+        logger.debug('The new weights are %s', str(new_weights))
         self.asset_weights = new_weights
+        self.adjust_weights(self.asset_weights)
+
+    def adjust_weights(self, new_weights):
+
+        sum_ = sum(new_weights)
+        if sum_ < 1:
+            nmbr = (1 - sum_) // 0.0001
+            self.asset_weights = [value + 0.0001 if idx < nmbr else value for idx, value in enumerate(new_weights)]
+        elif sum_ >= 1:
+            nmbr = (sum_ - 1) // 0.0001
+            self.asset_weights = [value - 0.0001 if idx < nmbr else value for idx, value in enumerate(new_weights)]
+            
+            
+    def get_prtf_return_df(self, base = 100):
+
+        df = self.prtf_df.copy()
+        df.set_index('Date', inplace=True)
+        df = df / df.iloc[0] * base
+        return df.dot(self.asset_weights)  
+    
     
     def portfolio_return(self):
         
-        logging.info('Calculating the Portfolio return from %s to %s.', 
+        logger.debug('Calculating the Portfolio return from %s to %s.', 
                      self.prtf_df['Date'].iloc[0], 
                      self.prtf_df['Date'].iloc[-1])
 
         cumulative_returns = (self.prtf_df[self].pct_change() + 1).cumprod() - 1
-        prtf_return = np.dot(cumulative_returns.iloc[-1], self.asset_weights) * 100
+        total_cumulative_returns = np.dot(cumulative_returns.iloc[-1], self.asset_weights)
+        num_years = self.prtf_df.shape[0] / 252
+        annualized_return = (total_cumulative_returns + 1) ** (1 / num_years) - 1
 
-        return prtf_return
+        return annualized_return * 100
     
        
-    def portfolio_variance(self):
+    def portfolio_risk(self, annualized = True):
         asset_weights_array = np.array(self.asset_weights)
-        covariance_matrix = self.prtf_df[self].cov()
-        portfolio_variance = asset_weights_array.T.dot(covariance_matrix).dot(asset_weights_array)
-        #portfolio_risk = np.sqrt(portfolio_variance)
-        return portfolio_variance
+        returns_df = self.prtf_df[self].pct_change().dropna()
+        covariance_matrix = returns_df.cov()
+        portfolio_risk = asset_weights_array.T.dot(covariance_matrix).dot(asset_weights_array)
+        portfolio_risk = np.sqrt(portfolio_risk)
+        if annualized:
+            return portfolio_risk * np.sqrt(252)
+        return portfolio_risk
 
+    def sharpe_ratio(self, risk_free_rate = 0.03):
+
+        daily_returns = self.prtf_df[self].pct_change()
+        portfolio_returns = daily_returns.dot(self.asset_weights)
+
+        annualized_return = portfolio_returns.mean() * 252
+        portfolio_std_dev = portfolio_returns.std() * np.sqrt(252)
+
+        sharpe_ratio = (annualized_return - risk_free_rate) / portfolio_std_dev
+
+        return sharpe_ratio
     
+    def VaR(self, confidence = 0.95):
+
+        daily_returns = self.prtf_df[self].pct_change()
+        portfolio_returns = daily_returns.dot(self.asset_weights)
+
+        VaR = np.percentile(portfolio_returns.dropna(), (1 - confidence) * 100)
+
+        return abs(VaR)
+
     def portfolio_pe(self):
 
         pe = 0

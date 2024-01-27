@@ -2,7 +2,12 @@ import pandas as pd
 import numpy as np
 import config as c
 import datetime as dt
+from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 import os
+import sys
+import datetime as dt
+import random
 
 
 
@@ -11,6 +16,14 @@ initial_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'
 quote_columns = initial_columns[1:-1]
 
 
+def get_pickle_filename(filename = None):
+
+    if filename is None:
+        now = dt.datetime.now()
+        filename = now.strftime("%Y-%m-%d_%H.%M")
+    f_pkl = filename + '.pkl'
+    return f_pkl
+
 def date_str_to_dt(date):
 
     #print('converting string to datetime.date')
@@ -18,26 +31,55 @@ def date_str_to_dt(date):
         return_date = date
     else:
         try:
-            dt.datetime.strptime(date, '%Y-%m-%d')
-            return_date = date
+            return_date = dt.datetime.strptime(date, '%Y-%m-%d').date()
         except ValueError:
             return_date = None
     
     return return_date
 
+def add_years_months_days(date, years = None, months = None, days = None, string = True):
+
+    if isinstance(date, str):
+        date = date_str_to_dt(date)
+
+    if years is None:
+        years = 0
+    if months is None:
+        months = 0
+    if days is None:
+        days = 0
+        
+    new_date = date + relativedelta(years=years, months=months)
+    new_date += timedelta(days=days)
+
+    if string:
+        new_date = new_date.strftime("%Y-%m-%d")
+    return new_date
+
+
+
 def df_start_to_end_date(data, start_date = None, end_date = None):
 
     new_data = data.copy()
     if start_date is not None:
-        start_date_time = dt.datetime.strptime(start_date, "%Y-%m-%d").date()
+        start_date_time = date_str_to_dt(start_date)
         new_data = new_data.loc[data['Date'] >= start_date_time]
 
     #If any start date was specified, remove any data after that 
     if end_date is not None:
-        end_date_time = dt.datetime.strptime(end_date, "%Y-%m-%d").date()
+        end_date_time = date_str_to_dt(end_date)
         new_data = new_data.loc[data['Date'] <= end_date_time]
 
     return new_data
+
+def get_price_on_date(data, date):
+
+    new_data = data.copy()
+    date_dt = dt.datetime.strptime(date, "%Y-%m-%d").date()
+    new_data = new_data.loc[data['Date'] == date_dt]
+    
+    return new_data
+    
 
 def check_valid_dates(data, start_date = None, end_date = None):
     
@@ -127,3 +169,35 @@ def get_path(index_name, data_type = None, filename = None):
         folder_names.append(filename)
 
     return os.path.join(*folder_names)
+
+
+def total_size(obj, seen=None):
+    """Recursively finds size of objects in bytes."""
+    size = sys.getsizeof(obj)
+    if seen is None:
+        seen = set()
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    # Mark as seen *before* entering recursion to gracefully handle self-referential objects
+    seen.add(obj_id)
+
+    if isinstance(obj, dict):
+        size += sum((total_size(k, seen) + total_size(v, seen)) for k, v in obj.items())
+    elif hasattr(obj, '__dict__'):
+        size += total_size(obj.__dict__, seen)
+    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+        size += sum(total_size(i, seen) for i in obj)
+
+    return size
+
+
+def aux_get_swap_numbers(lenght):
+
+    nmbr1 = random.randint(0, lenght)
+    nmbr2 = random.randint(0, lenght)
+
+    if nmbr1 >= nmbr2:
+        nmbr1, nmbr2 = aux_get_swap_numbers(lenght)
+
+    return nmbr1, nmbr2
