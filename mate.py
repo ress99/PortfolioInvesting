@@ -12,16 +12,6 @@ def as_mate(ind1, ind2):
     return ind1, ind2
 
 
-# def aux_get_swap_numbers(lenght):
-
-#     nmbr1 = random.randint(0, lenght)
-#     nmbr2 = random.randint(0, lenght)
-
-#     if nmbr1 >= nmbr2:
-#         nmbr1, nmbr2 = aux_get_swap_numbers(lenght)
-
-#     return nmbr1, nmbr2
-
 def po_mate(ind1, ind2):
 
     length = len(ind1.asset_weights)

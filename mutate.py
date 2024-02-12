@@ -2,15 +2,6 @@ import random
 
 import data_op as op
 
-# def aux_get_swap_numbers(lenght):
-
-#     nmbr1 = random.randint(0, lenght)
-#     nmbr2 = random.randint(0, lenght)
-
-#     if nmbr1 >= nmbr2:
-#         nmbr1, nmbr2 = aux_get_swap_numbers(lenght)
-
-#     return nmbr1, nmbr2
 
 def as_mutate(ind):
 

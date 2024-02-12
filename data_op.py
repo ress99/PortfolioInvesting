@@ -179,7 +179,7 @@ def total_size(obj, seen=None):
     obj_id = id(obj)
     if obj_id in seen:
         return 0
-    # Mark as seen *before* entering recursion to gracefully handle self-referential objects
+
     seen.add(obj_id)
 
     if isinstance(obj, dict):

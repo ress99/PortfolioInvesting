@@ -11,3 +11,7 @@ test_folder = 'Test_Run'
 assets_folder = 'Assets'
 
 first_day = '2010-01-01'
+last_day = '2021-01-01'
+
+pop_size = 100
+size_cache = 250

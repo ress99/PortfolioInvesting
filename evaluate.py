@@ -1,4 +1,4 @@
-def evaluate(ind):
+def return_risk(ind):
 
     prtf_return = ind.portfolio_return()
     prtf_variance = ind.portfolio_risk()

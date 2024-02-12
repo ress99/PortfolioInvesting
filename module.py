@@ -33,39 +33,56 @@ class Module:
 
     def get_asset_weights(self, prtf, asset_weights, random_weights):
 
+        # #Random weights
+        # if random_weights:
+        #     asset_weights = [random.random() for _ in range(len(prtf.asset_weights))]
+        #     prtf.asset_weights = asset_weights
+        #     prtf.normalize_asset_weights()
+        # #Same weights
+        # elif asset_weights is None:
+        #     prtf.apply_same_weights()
+        # #Specific weights
+        # else:
+        #     prtf.asset_weights = asset_weights
+        #     prtf.normalize_asset_weights()  
+
+        #Specific weights
+        if asset_weights is not None:
+            prtf.asset_weights = asset_weights
+            prtf.normalize_asset_weights()  
+
         #Random weights
         if random_weights:
             asset_weights = [random.random() for _ in range(len(prtf.asset_weights))]
             prtf.asset_weights = asset_weights
             prtf.normalize_asset_weights()
+
         #Same weights
-        elif asset_weights is None:
-            prtf.apply_same_weights()
-        #Specific weights
         else:
-            prtf.asset_weights = asset_weights
-            prtf.normalize_asset_weights()  
+            prtf.apply_same_weights()
+
+
 
         return  
 
-    def init_Portfolio_Individual(self, assets = None, asset_weights = None, random_weights = False):
+    def init_Portfolio_Individual(self, assets = None, asset_weights = None, random_weights = False, start_date = None, end_date = None, indexes = None):
 
-        prtf = Portfolio(list(self.indexes.values()), 
-                                cardinality_constraint=self.PRTF_SIZE,
-                                start_date = self.start_date, 
-                                end_date = self.end_date)
+        if start_date is None:
+            start_date = self.start_date
+        if end_date is None:
+            end_date = self.end_date
+        if indexes is None:
+            indexes = self.index_objects
+
+        prtf = Portfolio(indexes, cardinality_constraint=self.prtf_size, start_date = start_date, end_date = end_date)
         prtf.fitness = self.objectives
 
         if assets is None:
-            prtf.prtf_dict = random.sample(self.all_assets, self.PRTF_SIZE)
+            prtf.prtf_dict = random.sample(self.all_assets, self.prtf_size)
         else:
             prtf.prtf_dict = assets
 
         self.get_asset_weights(prtf, asset_weights, random_weights)
-
-        #If the assets and dates are not compatible, recall with same arguments
-        # if not op.check_valid_dates(prtf.prtf_df, self.start_date, self.end_date):
-        #     prtf = self.init_Portfolio_Individual(assets, asset_weights, random_weights)
 
         return prtf
 
@@ -82,6 +99,7 @@ class Module:
 
     def find_non_dominant(self):
         non_dominant = []
+        #Get population as input parameter
 
         for i, ind_A in enumerate(self.pop):
             is_dominated = False
@@ -111,6 +129,11 @@ class Module:
 
         return
     
+    def clone_population(self, pop = None):
+
+        pop = self.get_pop(pop)
+        return [self.clone(ind) for ind in pop]
+
     def asset_list_counter(self, pop = None):
 
         pop = self.get_pop(pop)
@@ -170,14 +193,6 @@ class Module:
             pickle_data = pickle.load(file)
         
         return pickle_data
-
-    # def get_pickle_filename(self, filename = None):
-
-    #     if filename is None:
-    #         now = datetime.datetime.now()
-    #         filename = now.strftime("%Y-%m-%d_%H.%M")
-    #     f_pkl = filename + '.pkl'
-    #     return f_pkl
     
     def save_pkl(self, data_to_pickle, f_pkl):
 
@@ -220,7 +235,7 @@ class Module:
 
     def init_data_to_dict(self):
 
-        init_data = {"indexes": list(self.indexes.values()), "PRTF_SIZE": self.PRTF_SIZE, "objectives": self.objectives, 
+        init_data = {"indexes": list(self.indexes.values()), "prtf_size": self.prtf_size, "objectives": self.objectives, 
             "start_date": self.start_date, "end_date": self.end_date, 
             "bb_path": self.bb_path, "bb_mode": self.bb_mode, 
             "CXPB": self.CXPB, "MUTPB": self.MUTPB,
@@ -229,21 +244,40 @@ class Module:
         
         return init_data
     
-    def init_data_from_dict(self, pickle_data):
+    def init_data_from_dict(self, dictionary):
 
-        indexes = pickle_data['init_data']['indexes']
-        PRTF_SIZE = pickle_data['init_data']['PRTF_SIZE']
-        objectives = pickle_data['init_data']['objectives']
-        start_date = pickle_data['init_data']['start_date']
-        end_date = pickle_data['init_data']['end_date']
-        bb_path = pickle_data['init_data']['bb_path']
-        CXPB = pickle_data['init_data']['CXPB']
-        MUTPB = pickle_data['init_data']['MUTPB']
-        pop_size = pickle_data['init_data']['pop_size']
-        generations = pickle_data['init_data']['generations']
-        filename = pickle_data['init_data']['filename']
+        indexes = dictionary['indexes']
+        prtf_size = dictionary['prtf_size']
+        objectives = dictionary['objectives']
+        start_date = dictionary['start_date']
+        end_date = dictionary['end_date']
+        if 'pop_size' in dictionary.keys():
+            pop_size = dictionary['pop_size']
+        else:
+            pop_size = None
+        if 'generations' in dictionary.keys():
+            generations = dictionary['generations']
+        else:
+            generations = None
+        if 'filename' in dictionary.keys():
+            filename = dictionary['filename']
+        else:
+            filename = None
+        if 'bb_path' in dictionary.keys():
+            bb_path = dictionary['bb_path']
+        else:
+            bb_path = None
+        if 'CXPB' in dictionary.keys():
+            CXPB = dictionary['CXPB']
+        else:
+            CXPB = None
+        if 'MUTPB' in dictionary.keys():
+            MUTPB = dictionary['MUTPB']
+        else:
+            MUTPB = None
+
         
-        return indexes, PRTF_SIZE, objectives, start_date, end_date, bb_path, CXPB, MUTPB, pop_size, generations, filename
+        return indexes, prtf_size, objectives, start_date, end_date, bb_path, CXPB, MUTPB, pop_size, generations, filename
     
     def ea_ops_to_dict(self):
         ea_ops_data = {}
@@ -261,30 +295,33 @@ class Module:
 
         return ea_ops_data
 
-    def ea_ops_from_dict(self, pickle_data):
-        if 'ea_ops' in pickle_data:
-            if 'mate' in pickle_data['ea_ops']:
-                self.mate = pickle_data['ea_ops']['mate']
-            if 'mutate' in pickle_data['ea_ops']:
-                self.mutate = pickle_data['ea_ops']['mutate']
-            if 'select' in pickle_data['ea_ops']:
-                self.select = pickle_data['ea_ops']['select']
-            if 'evaluate' in pickle_data['ea_ops']:
-                self.evaluate = pickle_data['ea_ops']['evaluate']
-            if 'algorithm' in pickle_data['ea_ops']:
-                self.algorithm = pickle_data['ea_ops']['algorithm']
+    def ea_ops_from_dict(self, ea_dict):
+
+        if 'ea_ops' in ea_dict:
+            ea_dict = ea_dict['ea_ops']
+
+        if 'mate' in ea_dict:
+            self.mate = ea_dict['mate']
+        if 'mutate' in ea_dict:
+            self.mutate = ea_dict['mutate']
+        if 'select' in ea_dict:
+            self.select = ea_dict['select']
+        if 'evaluate' in ea_dict:
+            self.evaluate = ea_dict['evaluate']
+        if 'algorithm' in ea_dict:
+            self.algorithm = ea_dict['algorithm']
 
         return
 
-    def init_attributes(self, indexes, PRTF_SIZE, objectives, start_date, end_date, 
+    def init_attributes(self, indexes, prtf_size, objectives, start_date, end_date, 
                         bb_path, CXPB, MUTPB, pop_size, generations, filename):
             
         self.filename = filename
         self.indexes = indexes
-        self.PRTF_SIZE = PRTF_SIZE
-        self.objectives = objectives
+        self.prtf_size = prtf_size
         self.start_date = start_date
         self.end_date = end_date
+        self.objectives = objectives
         self.CXPB = CXPB
         self.MUTPB = MUTPB
         self.pop_size = pop_size
@@ -293,6 +330,21 @@ class Module:
         self.bb_path = bb_path
         if bb_path is not None:
             self.import_blackbox_module(bb_path)
+
+    def init_from_file(self, filename):
+
+        pickle_data = self.get_pickle_data(filename, self.folder)
+
+        (indexes, prtf_size, objectives, start_date, end_date, 
+         bb_path, CXPB, MUTPB, pop_size, generations, _) = self.init_data_from_dict(pickle_data['init_data'])
+
+        self.init_attributes(indexes, prtf_size, objectives, start_date, end_date, 
+                             bb_path, CXPB, MUTPB, pop_size, generations, filename)
+        
+        self.ea_ops_from_dict(pickle_data)
+        self.get_attributes_from_dict(self.attributes_list, pickle_data)
+
+        return
 
 
     def add_constraint(self, constraint):
@@ -342,6 +394,17 @@ class Module:
         return
 
 
+    def standard_labels(self, title, xlabel, ylabel):
+
+        if title is None:
+            title = 'Objective Space'
+        if xlabel is None:
+            xlabel = 'Return'
+        if ylabel is None:
+            ylabel = 'Risk'
+
+        return title, xlabel, ylabel
+
     def plot_min_max(self):
 
         min_max_return = [[i[0, 0], np.percentile(i[:, 0], 25), np.mean(i[:, 0]), np.percentile(i[:, 0], 75), i[-1, 0]] for i in self.pareto_fronts]
@@ -386,53 +449,54 @@ class Module:
         for idx, arr in enumerate(self.pareto_fronts):
             arr_list[idx] = np.array([i for i in arr if all(min_v <= val <= max_v for val, (min_v, max_v) in zip(i, zip(min_values, max_values)))])
         return arr_list
+        
 
-    def plot_2_objectives_as_sel_vs_po(self, as_sel, po):
+    def plot_2_objectives_as_sel_vs_po(self, as_sel, po, title = None, xlabel = None, ylabel = None):
+
+        title, xlabel, ylabel = self.standard_labels(title, xlabel, ylabel)
 
         as_sel_arr_list, po_arr_list = as_sel.pareto_fronts, po.pareto_fronts
 
         plt.plot(as_sel_arr_list[-1][:, 0], as_sel_arr_list[-1][:, 1], color = 'blue', marker = 'o', label = 'Asset Selection Pareto Front')
         plt.plot(po_arr_list[-1][:, 0], po_arr_list[-1][:, 1], color = '#8dff52', marker = 'o', label = 'Portfolio Optimization Pareto Front')
-        # for arr in obj1_arr_list:
-        #     plt.plot(arr[:, 0], arr[:, 1], color = 'blue', marker = 'o', label = 'Asset_Selection Pareto Front')
-       
-        # for arr in obj2_arr_list:
-        #     plt.plot(arr[:, 0], arr[:, 1], color = '#8dff52', marker = 'o', label = 'Portfolio Optimization Pareto Front')
-
 
         if hasattr(as_sel, 'final_prtf'):
             prtf_point = as_sel.final_prtf.fitness.values
             plt.plot(prtf_point[0], prtf_point[1], color = 'red', marker = 'o', label = 'Asset Selection Final Portfolio')
 
-        plt.title('Sine Wave Plot')
-        plt.xlabel('X Axis Label')
-        plt.ylabel('Y Axis Label')
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
         plt.grid()
         plt.legend()
         plt.show()
 
 
-    def plot_2_objectives_as_sel_vs_2po(self, as_sel, po_without, po_with):
+    def plot_2_objectives_as_sel_vs_2po(self, as_sel, po_without, po_with, title = None, xlabel = None, ylabel = None):
+
+        title, xlabel, ylabel = self.standard_labels(title, xlabel, ylabel)
 
         as_sel_arr_list, po_withtout_arr_list, po_with_arr_list = as_sel.pareto_fronts, po_without.pareto_fronts, po_with.pareto_fronts
 
         plt.plot(as_sel_arr_list[-1][:, 0], as_sel_arr_list[-1][:, 1], color = 'blue', marker = 'o', label = 'Asset Selection Pareto Front')
         plt.plot(po_withtout_arr_list[-1][:, 0], po_withtout_arr_list[-1][:, 1], color = '#8dff52', marker = 'o', label = 'Portfolio Optimization Pareto Front No Constraint')
-        plt.plot(po_with_arr_list[-1][:, 0], po_with_arr_list[-1][:, 1], color = '#D9DC32', marker = 'o', label = 'Portfolio Optimization Pareto Front 0.05 Constraint')
+        plt.plot(po_with_arr_list[-1][:, 0], po_with_arr_list[-1][:, 1], color = '#FAFE18', marker = 'o', label = 'Portfolio Optimization Pareto Front 0.05 Constraint')
 
         if hasattr(as_sel, 'final_prtf'):
             prtf_point = as_sel.final_prtf.fitness.values
             plt.plot(prtf_point[0], prtf_point[1], color = 'red', marker = 'o', label = 'Asset Selection Final Portfolio')
 
-        plt.title('Sine Wave Plot')
-        plt.xlabel('X Axis Label')
-        plt.ylabel('Y Axis Label')
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
         plt.grid()
         plt.legend()
         plt.show()
 
 
-    def plot_2_objectives(self, arr_list = None):
+    def plot_objective_space(self, arr_list = None, title = None, xlabel = None, ylabel = None):
+
+        title, xlabel, ylabel = self.standard_labels(title, xlabel, ylabel)
 
         if arr_list is None:
             arr_list = self.pareto_fronts
@@ -450,12 +514,57 @@ class Module:
             prtf_point = self.final_prtf.fitness.values
             plt.plot(prtf_point[0], prtf_point[1], color = 'red', marker = 'o', label = 'Final Portfolio')
         
-        plt.title('Sine Wave Plot')
-        plt.xlabel('X Axis Label')
-        plt.ylabel('Y Axis Label')
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
         plt.grid()
         plt.legend()
         plt.show()
+
+    def plot_objective_space_test(self, years = None, months = None, start_date = None, end_date = None, pareto_front = None, title = None, xlabel = None, ylabel = None):
+
+        if pareto_front is None:
+            pareto_front = self.pareto_front
+
+        if years is not None or months is not None:
+            start_date = op.add_years_months_days(pareto_front[0].end_date, 0, 0, 1)
+            end_date = op.add_years_months_days(start_date, years, months)
+
+        elif start_date is None and end_date is None:
+            return
+
+        print(start_date, end_date)
+        title, xlabel, ylabel = self.standard_labels(title, xlabel, ylabel)
+
+        prtf_list = []
+        for old_prtf in pareto_front:
+
+            prtf = self.init_Portfolio_Individual(assets = old_prtf.asset_list, 
+                                                  asset_weights = old_prtf.asset_weights,
+                                                  start_date = start_date, end_date = end_date, 
+                                                  indexes = old_prtf.index_objects)
+            prtf_list.append(prtf)
+            
+
+        returns = [i.portfolio_return() for i in prtf_list]
+        MDDs = [i.MDD() for i in prtf_list]
+        plt.scatter(MDDs, returns, color = 'blue', marker = 'o', label = 'Pareto Front')
+        # for idx in range(len(returns)):
+        #     if idx == 1:
+        #         plt.plot(MDDs[idx], returns[idx], color = 'blue', marker = 'o', label = 'Pareto Front')
+        #     else:
+        #         plt.plot(MDDs[idx], returns[idx], color = 'blue', marker = 'o')
+
+        index_prtf = prtf_list[0].get_index_portfolio(prtf_list[0].index_objects, start_date, end_date)
+        plt.scatter(index_prtf.MDD(), index_prtf.portfolio_return(), color = 'red', marker = 'o', label = 'Index')
+
+        plt.xlabel('Maximum Drawdown')
+        plt.ylabel('Return')
+        plt.title('Pareto Front Test Run')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
 
 
     def plot_all_returns(self, pareto_front = None, start_date = None, end_date = None):
@@ -485,9 +594,9 @@ class Module:
         plt.plot(df_to_plot.index, df_to_plot.values, label = 'Index', color = 'red')
 
 
-        plt.xlabel('X Axis Label')
-        plt.ylabel('Y Axis Label')
-        plt.title('Sine Wave Plot')
+        plt.xlabel('Date')
+        plt.ylabel('Return')
+        # plt.title('Test Run Returns')
         plt.xticks(rotation=45)
         plt.subplots_adjust(bottom=0.2)
         plt.legend()
@@ -505,9 +614,9 @@ class Module:
         for idx, arr in enumerate(generations_array):
             plt.plot(arr[:, 0], arr[:, 1], color = colors[idx], marker = 'o', label = f"{generations[idx] + 1}th Generation")
 
-        plt.title('Sine Wave Plot')
-        plt.xlabel('X Axis Label')
-        plt.ylabel('Y Axis Label')
+        plt.title('Objective Space')
+        plt.xlabel('Return')
+        plt.ylabel('Risk')
         plt.grid()
         plt.legend()
         plt.show()
@@ -565,6 +674,10 @@ class Module:
     @indexes.setter
     def indexes(self, idxs):
         self._indexes = {i.name: i for i in idxs}
+
+    @property
+    def index_objects(self):
+        return list(self._indexes.values())
 
     @property
     def all_assets(self):

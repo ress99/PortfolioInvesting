@@ -15,10 +15,13 @@ class Asset:
 
         if all_data is False:
             first_day = c.first_day
+            last_day = c.last_day
         else:
             first_day = '1900-01-01'
+            last_day = '2100-01-01'
 
-        data = data.loc[data['Date'] > first_day]         
+        data = data.loc[data['Date'] > first_day]   
+        data = data.loc[data['Date'] < last_day]         
         data.reset_index(drop = True)  
         data['Date'] = pd.to_datetime(data['Date']).dt.date     
 
@@ -115,12 +118,12 @@ class SP_Ticker(Asset):
     #####
     def save_fin_data(self):
 
-        filename = op.get_path('SP500', 'F', self.ticker_name + c.filetype)       
+        filename = op.get_path('SP500', 'F', self.asset_name + c.filetype)       
         data = pd.read_csv(filename, index_col = 0)
 
         return data
 
-    def get_financial_value(self, financial, iloc_value = 0):
+    def get_financial_value(self, financial, iloc_value = -1):
 
         value = self.fdata.iloc[iloc_value][financial]
         if isinstance(value, str):
@@ -131,11 +134,11 @@ class SP_Ticker(Asset):
         return value
 
 
-    def __init__(self, ticker_name, fin_data = False):
+    def __init__(self, asset_name, fin_data = False):
 
         #Initializes ticker parameters
-        self.ticker_name = ticker_name
-        self.filename = op.get_path(self.index, 'H', self.ticker_name + c.filetype)
+        self.asset_name = asset_name
+        self.filename = op.get_path(self.index, 'H', self.asset_name + c.filetype)
         self.data = self.save_hist_data()
         if fin_data:
             self.fdata = self.save_fin_data()
@@ -159,7 +162,8 @@ class SP_Ticker(Asset):
     
     def price_earnings_ratio(self):
 
-        eps = self.get_financial_value('Basic EPS')
+        eps_ = self.get_financial_value('Basic EPS')
+        eps = max(0, eps_)
         self.pe = self.data.iloc[-1]['Close'] / eps
 
         return
@@ -169,10 +173,10 @@ class DAX_Ticker(Asset):
     
     index = 'DAX40'
 
-    def __init__(self, ticker_name):
+    def __init__(self, asset_name):
 
         #Initializes ticker parameters
         
-        self.ticker_name = ticker_name
-        self.filename = op.get_path(self.index, 'H', self.ticker_name + c.filetype)
+        self.asset_name = asset_name
+        self.filename = op.get_path(self.index, 'H', self.asset_name + c.filetype)
         self.data = self.save_hist_data()

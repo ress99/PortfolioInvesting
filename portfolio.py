@@ -14,10 +14,8 @@ logger = logging.getLogger(__name__)
 
 class Portfolio:
 
-    cache = LRUCache(maxsize=5000)
-    _ct = 0
-    times = 0
-    combinations_dict = {}
+    cache = LRUCache(maxsize=c.size_cache)
+    count = 0
 
     #####
     #Normalizes the weights of all portfolio tickets
@@ -109,9 +107,8 @@ class Portfolio:
         prtf.apply_same_weights()
         return prtf
     
-    def get_assets_same_df(self, column = 'Close', start_date = None, end_date = None):
+    def set_assets_same_df(self, column = 'Close', start_date = None, end_date = None):
 
-        start = time.perf_counter()
         lengths_list = [len(self.get_object(asset).data) for asset in self]
         longest_index = lengths_list.index(max(lengths_list))
         longest_asset = self.asset_list[longest_index]
@@ -131,7 +128,7 @@ class Portfolio:
         logger.info('All the %d assets added to the same dataframe with %s merge.', len(self), self.merge_option)
 
         df = op.df_start_to_end_date(df, start_date = start_date, end_date = end_date)
-        Portfolio.times += time.perf_counter() - start
+
         return df
 
     def get_asset_index(self, asset):
@@ -220,11 +217,12 @@ class Portfolio:
             self.cardinality_constraint = cardinality_constraint
             self.start_date = start_date
             self.end_date = end_date
-            # #TODO mudar data quando for inner
             self.merge_option = merge_option
             self.column = column
             self.invalid = False
             self.penalty = 0
+
+        self.old_key = None
 
     def __len__(self):
         return len(self._prtf_dict)
@@ -288,6 +286,10 @@ class Portfolio:
         self._indexes = {i.name: i for i in idxs}
 
     @property
+    def index_objects(self):
+        return list(self._indexes.values())
+
+    @property
     def all_assets(self):
         assets = []
         aux_list = [list(i) for i in self.indexes.values()]
@@ -324,17 +326,41 @@ class Portfolio:
         
         key = tuple(self.setts)
 
+        # if hasattr(self, 'old_prtf_df'):
+        #     if key == self.old_key:
+        #         return self.old_prtf_df
+
+        # if key not in Portfolio.cache:
+        #     dataframe = self.set_assets_same_df(column = 'Close', 
+        #                             start_date = self.start_date, 
+        #                             end_date=self.end_date)
+        #     Portfolio.cache[key] = dataframe
+
+        # self.old_key = key
+        # self.old_prtf_df = Portfolio.cache[key] 
+        # return self.old_prtf_df
+
+
+
         if key not in Portfolio.cache:
-            dataframe = self.get_assets_same_df(column = 'Close', 
-                                       start_date = self.start_date, 
-                                       end_date=self.end_date)
+            dataframe = self.set_assets_same_df(column = 'Close', 
+                                        start_date = self.start_date, 
+                                        end_date=self.end_date)
             Portfolio.cache[key] = dataframe
 
         return Portfolio.cache[key]
+    
+        # dataframe = self.set_assets_same_df(column = 'Close', 
+        #                             start_date = self.start_date, 
+        #                             end_date=self.end_date)
+        # return dataframe
 
-        # return self.get_assets_same_df(column = 'Close', 
-        #                                start_date = self.start_date, 
-        #                                end_date=self.end_date)
+
+    @property
+    def daily_returns(self):
+        
+        return self.prtf_df[self].pct_change()
+
 
     @property
     def setts(self):
@@ -480,60 +506,64 @@ class Portfolio:
     
     
     def portfolio_return(self):
-        
-        logger.debug('Calculating the Portfolio return from %s to %s.', 
-                     self.prtf_df['Date'].iloc[0], 
-                     self.prtf_df['Date'].iloc[-1])
 
-        cumulative_returns = (self.prtf_df[self].pct_change() + 1).cumprod() - 1
+        cumulative_returns = (self.daily_returns + 1).cumprod() - 1
         total_cumulative_returns = np.dot(cumulative_returns.iloc[-1], self.asset_weights)
-        num_years = self.prtf_df.shape[0] / 252
-        annualized_return = (total_cumulative_returns + 1) ** (1 / num_years) - 1
+        annualized_return = (total_cumulative_returns + 1) ** (1 / (self.prtf_df.shape[0] / 252)) - 1
 
         return annualized_return * 100
     
        
     def portfolio_risk(self, annualized = True):
         asset_weights_array = np.array(self.asset_weights)
-        returns_df = self.prtf_df[self].pct_change().dropna()
+        returns_df = self.daily_returns.dropna()
         covariance_matrix = returns_df.cov()
-        portfolio_risk = asset_weights_array.T.dot(covariance_matrix).dot(asset_weights_array)
-        portfolio_risk = np.sqrt(portfolio_risk)
+        portfolio_risk = np.sqrt(asset_weights_array.T.dot(covariance_matrix).dot(asset_weights_array))
         if annualized:
             return portfolio_risk * np.sqrt(252)
         return portfolio_risk
 
     def sharpe_ratio(self, risk_free_rate = 0.03):
 
-        daily_returns = self.prtf_df[self].pct_change()
-        portfolio_returns = daily_returns.dot(self.asset_weights)
+        # portfolio_returns = self.daily_returns.dot(self.asset_weights)
+        # annualized_return = portfolio_returns.mean() * 252
+        # portfolio_std_dev = portfolio_returns.std() * np.sqrt(252)
+        # sharpe_ratio = (annualized_return - risk_free_rate) / portfolio_std_dev
 
-        annualized_return = portfolio_returns.mean() * 252
-        portfolio_std_dev = portfolio_returns.std() * np.sqrt(252)
-
-        sharpe_ratio = (annualized_return - risk_free_rate) / portfolio_std_dev
+        annualized_return = self.portfolio_return() / 100
+        portfolio_daily_returns = self.daily_returns.dot(self.asset_weights)
+        annualized_portfolio_std = portfolio_daily_returns.std() * np.sqrt(252)
+        sharpe_ratio = (annualized_return - risk_free_rate) / annualized_portfolio_std
 
         return sharpe_ratio
     
     def VaR(self, confidence = 0.95):
 
-        daily_returns = self.prtf_df[self].pct_change()
-        portfolio_returns = daily_returns.dot(self.asset_weights)
-
+        portfolio_returns = self.daily_returns.dot(self.asset_weights)
         VaR = np.percentile(portfolio_returns.dropna(), (1 - confidence) * 100)
 
         return abs(VaR)
+    
+    def MDD(self, absolute_value = True):
+
+        df_returns = self.get_prtf_return_df()
+        df_cummax = df_returns.cummax()
+        drawdowns = (df_returns - df_cummax) / df_cummax
+        max_drawdown = drawdowns.min()
+        if absolute_value:
+            max_drawdown = abs(max_drawdown)
+        return max_drawdown
 
     def portfolio_pe(self):
 
         pe = 0
         for i in self:
             pe += self[i]['object'].pe
-        return pe / 10
+        return pe / len(self)
     
     def portfolio_roe(self):
 
         roe = 0
         for i in self:
             roe += self[i]['object'].roe
-        return roe / 10
+        return roe / len(self)

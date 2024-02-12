@@ -131,7 +131,7 @@ class Test_Run():
     def run_portfolio_optimization(self, file, save_file = False, constraint = True):
 
         po = Portfolio_Optimization(self.indexes, self.prtf_size, self.objectives, self.start_date, self.end_date, 0.6, 0.6, self.pop_size, self.generations)
-        po.get_assets(pkl_filename = file)
+        po.set_assets(pkl_filename = file)
 
         if constraint:
             min_weight = Minimum_Weight(0.05)
@@ -140,8 +140,8 @@ class Test_Run():
         po.select = tools.selNSGA2
         po.mate = m.po_mate
         po.mutate = mut.po_mutate
-        po.evaluate = e.evaluate
-        po.algorithm = a.basic
+        po.evaluate = e.return_risk
+        po.algorithm = a.base_algorithm
 
         po.init_population()
         po.algorithm(po)
@@ -180,7 +180,10 @@ class Test_Run():
 
         return start_date, end_date
 
-    def plot_all_test_runs(self, tracking_list = None):
+    def plot_all_test_runs(self, tracking_list = None, title = None):
+
+        if title is None:
+            title = 'Portfolio Evolution in Test Data'
 
         if len(self.test_list) == 0:
             self.update_test_list(tracking_list)
@@ -192,10 +195,10 @@ class Test_Run():
         
         for list in self.test_list:
             plt.axvline(x=op.date_str_to_dt(list['end_date']), color='black', linestyle='--', lw=1.5)
-        
-        plt.xlabel('X Axis Label')
-        plt.ylabel('Y Axis Label')
-        plt.title('Sine Wave Plot')
+
+        plt.title(title)
+        plt.xlabel('Time')
+        plt.ylabel('Returns')
         plt.legend()
         plt.grid(True)
         plt.show()
@@ -291,6 +294,18 @@ class Test_Run():
         plt.legend()
         plt.grid(True)
         plt.show()
+
+
+    def convert_return_labels(self, title, xlabel, ylabel):
+
+        if title is None:
+            title = 'Portfolio Evolution'
+        if xlabel is None:
+            xlabel = 'Time'
+        if ylabel is None:
+            ylabel = 'Returns'
+
+        return title, xlabel, ylabel
 
     def save_pkl(self, filename = None):
 

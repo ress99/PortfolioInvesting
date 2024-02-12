@@ -80,18 +80,18 @@ class SP500(Index):
     #####
     #Saves ticker inside the dictionary self.sp500_dict
     #####
-    def get_asset(self, ticker_name, fin_data = False):
+    def get_asset(self, asset_name, fin_data = False):
 
-        ticker_name = ticker_name.upper()
+        asset_name = asset_name.upper()
 
-        #If the ticker_name exists
-        if ticker_name in self.asset_list:
+        #If the asset_name exists
+        if asset_name in self.asset_list:
             #If the ticker is not yet in self.sp500_dict, initialize it
-            if self.asset_dict[ticker_name] is None:
-                self.asset_dict[ticker_name] = SP_Ticker(ticker_name, fin_data)
-            return self.asset_dict[ticker_name]
+            if self.asset_dict[asset_name] is None:
+                self.asset_dict[asset_name] = SP_Ticker(asset_name, fin_data)
+            return self.asset_dict[asset_name]
 
-        #If the ticker_name is not valid
+        #If the asset_name is not valid
         else:
             print('Ticker name not found')
             return

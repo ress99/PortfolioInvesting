@@ -1,7 +1,7 @@
 import datetime as dt
 import time
 import numpy as np
-from index import SP500, DAX40
+
 import config as c
 from portfolio import Portfolio
 import math
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from functools import partial
 import datetime
 from statistics import median, mean
-from memory_profiler import memory_usage
+from memory_profiler import memory_usage, profile
 
 
 from deap import base
@@ -25,6 +25,8 @@ from deap import tools
 from asset_selection import Asset_Selection
 from portfolio_optimization import Portfolio_Optimization
 from constraints import ConstraintOption, Minimum_Weight, Index_Asset_Limit
+from index import SP500, DAX40
+from ticker import SP_Ticker, DAX_Ticker
 
 from test_run import Test_Run
 
@@ -33,7 +35,6 @@ import mutate as mut
 import evaluate as e
 import select_ as s
 import algorithm as a
-
 
 random.seed(1)
 
@@ -49,15 +50,13 @@ file_handler.setFormatter(formatter)
 root_logger.addHandler(file_handler)
 
 
-
-
 def pareto_front_500_generations():
 
     as_sel = Asset_Selection(filename = '500_generations')
     as_sel.plot_all_returns()
     as_sel.plot_all_returns(start_date = '2013-01-01', end_date = '2013-12-31')
     as_sel.plot_pareto_fronts_evolution([99, 199, 299, 399, 499])
-    as_sel.plot_2_objectives()
+    as_sel.plot_objective_space()
 
 
 def as_vs_po_return_risk():
@@ -73,9 +72,9 @@ def as_vs_po_return_risk():
     # as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
     # as_sel.mate = m.as_mate
     # as_sel.mutate = mut.as_mutate
-    # as_sel.evaluate = e.evaluate
+    # as_sel.evaluate = e.return_risk
     # as_sel.select = tools.selNSGA2
-    # as_sel.algorithm = a.basic
+    # as_sel.algorithm = a.base_algorithm
 
     # as_sel.init_population()
     # as_sel.algorithm(as_sel)
@@ -95,12 +94,12 @@ def as_vs_po_return_risk():
     # objectives = (1, -1)
 
     # po = Portfolio_Optimization(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
-    # po.get_assets(as_sel.final_prtf.asset_list) 
+    # po.set_assets(as_sel.final_prtf.asset_list) 
     # po.mate = m.po_mate
     # po.mutate = mut.po_reverse_weights
-    # po.evaluate = e.evaluate
+    # po.evaluate = e.return_risk
     # po.select = tools.selNSGA2
-    # po.algorithm = a.basic
+    # po.algorithm = a.base_algorithm
 
     # po.init_population()
     # po.algorithm(po)
@@ -119,12 +118,12 @@ def as_vs_po_return_risk():
     # objectives = (1, -1)
 
     # po = Portfolio_Optimization(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
-    # po.get_assets(as_sel.final_prtf.asset_list) 
+    # po.set_assets(as_sel.final_prtf.asset_list) 
     # po.mate = m.po_mate
     # po.mutate = mut.po_reverse_weights
-    # po.evaluate = e.evaluate
+    # po.evaluate = e.return_risk
     # po.select = tools.selNSGA2
-    # po.algorithm = a.basic
+    # po.algorithm = a.base_algorithm
 
     # po.init_population()
     # po.algorithm(po)
@@ -143,12 +142,12 @@ def as_vs_po_return_risk():
     # objectives = (1, -1)
 
     # po = Portfolio_Optimization(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
-    # po.get_assets(as_sel.final_prtf.asset_list) 
+    # po.set_assets(as_sel.final_prtf.asset_list) 
     # po.mate = m.po_mate
     # po.mutate = mut.po_reverse_weights
-    # po.evaluate = e.evaluate
+    # po.evaluate = e.return_risk
     # po.select = tools.selNSGA2
-    # po.algorithm = a.basic
+    # po.algorithm = a.base_algorithm
 
     # po.init_population()
     # po.algorithm(po)
@@ -157,24 +156,24 @@ def as_vs_po_return_risk():
     as_sel = Asset_Selection(filename = 'as_vs_po_return_risk')
     as_sel.final_prtf = as_sel.pareto_front[0]
     po = Portfolio_Optimization(filename = 'as_vs_po_return_risk_low_risk')
-    po.plot_2_objectives()
-    po.plot_2_objectives_as_sel_vs_po(as_sel, po)
+    po.plot_objective_space()
+    po.plot_2_objectives_as_sel_vs_po(as_sel, po, 'Portfolio Lowest Risk')
     po.plot_all_returns(start_date = '2013-01-01', end_date = '2013-12-31')
 
     
     as_sel = Asset_Selection(filename = 'as_vs_po_return_risk')
     as_sel.final_prtf = as_sel.pareto_front[len(as_sel.pareto_front) // 2]
     po = Portfolio_Optimization(filename = 'as_vs_po_return_risk_medium_risk')
-    po.plot_2_objectives()
-    po.plot_2_objectives_as_sel_vs_po(as_sel, po)
+    po.plot_objective_space()
+    po.plot_2_objectives_as_sel_vs_po(as_sel, po, 'Portfolio Median Risk')
     po.plot_all_returns(start_date = '2013-01-01', end_date = '2013-12-31')
 
 
     as_sel = Asset_Selection(filename = 'as_vs_po_return_risk')
     as_sel.final_prtf = as_sel.pareto_front[-1]
     po = Portfolio_Optimization(filename = 'as_vs_po_return_risk_high_risk')
-    po.plot_2_objectives()
-    po.plot_2_objectives_as_sel_vs_po(as_sel, po)
+    po.plot_objective_space()
+    po.plot_2_objectives_as_sel_vs_po(as_sel, po, 'Portfolio Highest Risk')
     po.plot_all_returns(start_date = '2013-01-01', end_date = '2013-12-31')
 
 
@@ -192,9 +191,9 @@ def weight_constraint():
     # as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
     # as_sel.mate = m.as_mate
     # as_sel.mutate = mut.as_mutate
-    # as_sel.evaluate = e.evaluate
+    # as_sel.evaluate = e.return_risk
     # as_sel.select = tools.selNSGA2
-    # as_sel.algorithm = a.basic
+    # as_sel.algorithm = a.base_algorithm
 
     # as_sel.init_population()
     # as_sel.algorithm(as_sel)
@@ -210,13 +209,13 @@ def weight_constraint():
     # objectives = (1, -1)
 
     # po = Portfolio_Optimization(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
-    # po.get_assets(as_sel.final_prtf.asset_list) 
+    # po.set_assets(as_sel.final_prtf.asset_list) 
     
     # po.mate = m.po_mate
     # po.mutate = mut.po_reverse_weights
-    # po.evaluate = e.evaluate
+    # po.evaluate = e.return_risk
     # po.select = tools.selNSGA2
-    # po.algorithm = a.basic
+    # po.algorithm = a.base_algorithm
 
     # po.init_population()
     # po.algorithm(po)
@@ -232,16 +231,16 @@ def weight_constraint():
     # objectives = (1, -1)
 
     # po = Portfolio_Optimization(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
-    # po.get_assets(as_sel.final_prtf.asset_list) 
+    # po.set_assets(as_sel.final_prtf.asset_list) 
 
     # min_weight = Minimum_Weight(0.05)
     # po.add_constraint(min_weight)
     
     # po.mate = m.po_mate
     # po.mutate = mut.po_reverse_weights
-    # po.evaluate = e.evaluate
+    # po.evaluate = e.return_risk
     # po.select = tools.selNSGA2
-    # po.algorithm = a.basic
+    # po.algorithm = a.base_algorithm
 
     # po.init_population()
     # po.algorithm(po)
@@ -251,13 +250,13 @@ def weight_constraint():
     po_without = Portfolio_Optimization(filename = 'without_weight_constraint')
     po_with = Portfolio_Optimization(filename = 'with_0.05_weight_constraint')
 
-    po_without.plot_2_objectives()
-    as_sel.plot_2_objectives_as_sel_vs_po(as_sel, po_without)
+    po_without.plot_objective_space()
+    as_sel.plot_2_objectives_as_sel_vs_po(as_sel, po_without, 'Portfolio Optimization Without Weight Constraint')
 
-    po_with.plot_2_objectives()
-    as_sel.plot_2_objectives_as_sel_vs_po(as_sel, po_with)
+    po_with.plot_objective_space()
+    as_sel.plot_2_objectives_as_sel_vs_po(as_sel, po_with, 'Portfolio Optimization With Weight Constraint')
 
-    as_sel.plot_2_objectives_as_sel_vs_2po(as_sel, po_without, po_with)
+    as_sel.plot_2_objectives_as_sel_vs_2po(as_sel, po_without, po_with, 'Portfolio Optimization With and Without Weight Constraint')
 
 
 def return_vs_sharpe_10():
@@ -273,9 +272,9 @@ def return_vs_sharpe_10():
     # as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
     # as_sel.mate = m.as_mate
     # as_sel.mutate = mut.as_mutate_all
-    # as_sel.evaluate = e.evaluate
+    # as_sel.evaluate = e.return_risk
     # as_sel.select = tools.selNSGA2
-    # as_sel.algorithm = a.basic
+    # as_sel.algorithm = a.base_algorithm
 
     # test = Test_Run(as_sel, '2010-01-01', 3, 1)
     # test.run_next_opimization()
@@ -300,7 +299,7 @@ def return_vs_sharpe_10():
     # as_sel.mutate = mut.as_mutate_all
     # as_sel.evaluate = e.sharpe_var
     # as_sel.select = tools.selNSGA2
-    # as_sel.algorithm = a.basic
+    # as_sel.algorithm = a.base_algorithm
 
     # test = Test_Run(as_sel, '2010-01-01', 3, 1)
     # test.run_next_opimization()
@@ -315,74 +314,144 @@ def return_vs_sharpe_10():
 
 
     test1.update_test_list()
-    test1.plot_all_test_runs()
-
     test2.update_test_list()
-    test2.plot_all_test_runs()
 
+    test1.plot_all_test_runs(title = 'Sharpe Ratio and Var Optimization')    
+    test2.plot_all_test_runs(title = 'Return and Risk Optimization')
+
+
+def plot_cache():
+
+    sizes = [50, 100, 150, 200, 250]
+    secs_no_cache = [10.51, 21.03, 30.02, 41.57, 49.73]
+    secs_100_cache = [2.54, 5.15, 8.25, 10.66, 14.01]
+    secs_250_cache = [2.38, 4.56, 6.97, 9.38, 12.55]
+    secs_500_cache = [2.37, 4.42, 6.58, 9.01, 11.19]
+    secs_1000_cache = [2.35, 4.40, 6.55, 8.67, 10.94]
+    secs_1000_cache = [2.34, 4.37, 6.52, 8.89, 10.89]
+
+    plt.plot(sizes, secs_no_cache, marker = 's', label = 'Without Cache')
+    plt.plot(sizes, secs_100_cache, marker = 's', label = '100 Cache, 51MB')
+    plt.plot(sizes, secs_250_cache, marker = 's', label = '250 Cache, 128MB')
+    plt.plot(sizes, secs_500_cache, marker = 's', label = '500 Cache, 255MB')
+    plt.plot(sizes, secs_1000_cache, marker = 's', label = '1000 Cache, 511MB')
+    # plt.plot(sizes, secs_500_cache, marker = 's', label = '2000 Cache, 1022MB')
+
+
+    plt.title('Seconds to Complete Each Generation')
+    plt.xlabel('Population Size')
+    plt.ylabel('Seconds')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+def plot_clone():
+
+    secs_no_deap = [0.0032, 0.0055, 0.0080, 0.01080, 0.0183]
+    secs_deap = [0.3069, 0.8868, 1.7776, 2.8286, 6.4237]
+    size = [10, 20, 30, 40, 50]
+
+    # print([secs_no_cache[i] / secs_cache[i] for i in range(len(secs_cache))])
+
+    plt.plot(size, secs_deap, marker = 's', label = 'With DEAP')
+    plt.plot(size, secs_no_deap, marker = 's', label = 'Without Deap')
+
+    plt.title('Seconds to Clone Population')
+    plt.xlabel('Population Size')
+    plt.ylabel('Seconds')
+    plt.yscale('log')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
+
+run = Test_Run(filename = 'return_risk_20')
+tracking_list = ['Index', 'Maximum Risk', 'Medium Risk', 'Low Risk', 'VaR', 'Sharpe Ratio']
+# tracking_list = ['Index', 'Maximum Risk', 'Medium Risk', 'Low Risk']
+
+run.update_test_list(tracking_list = tracking_list)
+run.plot_all_test_runs(tracking_list = tracking_list)
+lista = []
+for i in run.test_list:
+    lista.append([j.iloc[-1] for j in i['df_list']])
+df = pd.DataFrame(lista, columns=tracking_list)
+first_column = df.iloc[:, 0]
+df.iloc[:, 1:] = df.iloc[:, 1:].sub(first_column, axis=0)
+for i in range(len(run.test_list)):
+    run.obj.plot_objective_space_test(start_date = run.test_list[i]['start_date'], end_date = run.test_list[i]['end_date'], pareto_front = run.optimization_list[i]['prtf_list'])
 
 
 sp = SP500()
-dax = DAX40()
+init_dict = {'generations': 150, 'pop_size': c.pop_size, 'indexes': [sp],
+            'prtf_size': 20, 'start_date': '2010-01-01', 'end_date': '2012-12-31',
+            'CXPB': 0.5, 'MUTPB': 0.5, 'objectives': (1, -1)}
+ea_dict = {'mate': m.as_mate, 
+        'mutate': mut.as_mutate_all, 
+        'evaluate': e.return_risk,
+        'select': tools.selNSGA2, 
+        'algorithm': a.base_algorithm}
+as_sel = Asset_Selection(init_dict = init_dict)
+as_sel.ea_ops_from_dict(ea_dict)
+test = Test_Run(as_sel, '2010-01-01', 3, 1)
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.save_pkl('return_risk_20')
+exit()
 
 
+# as_sel = Asset_Selection(filename = 'test1')
+# as_sel.plot_all_returns(start_date = '2011-01-01', end_date = '2013-12-31')
+# as_sel.plot_objective_space_test(years = 1)
+# as_sel.plot_objective_space_test(start_date = '2013-01-01', end_date = '2013-12-31')
 
-# pareto_front_500_generations()
-as_vs_po_return_risk()
-# weight_constraint()
-#return_vs_sharpe_10()
-
-
-# generations = 200
-# pop_size = 100
-# indexes = [sp]
-# prtf_size = 10
-# start_date = '2010-01-01'
-# end_date = '2012-12-31'
-# objectives = (1, -1)
-
-# as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
-# as_sel.mate = m.as_mate
-# as_sel.mutate = mut.as_mutate_all
-# as_sel.evaluate = e.evaluate
-# as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
-
-# test = Test_Run(as_sel, '2010-01-01', 3, 1)
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.save_pkl('return_risk_size10')
+# as_sel = Asset_Selection(filename = 'test1')
+# as_sel.plot_all_returns(start_date = '2014-01-01', end_date = '2014-12-31')
+# as_sel.plot_objective_space_test(years = 1)
+# as_sel.plot_objective_space_test(start_date = '2014-01-01', end_date = '2014-12-31')
 
 
+    
+sp = SP500()
+init_dict = {'generations': 25, 'pop_size': c.pop_size, 'indexes': [sp],
+            'prtf_size': 10, 'start_date': '2010-01-01', 'end_date': '2012-12-31',
+            'CXPB': 0.5, 'MUTPB': 0.5, 'objectives': (1, -1)}
+ea_dict = {'mate': m.as_mate, 
+        'mutate': mut.as_mutate_all, 
+        'evaluate': e.return_risk,
+        'select': tools.selNSGA2, 
+        'algorithm': a.base_algorithm}
+
+print(init_dict)
+as_sel = Asset_Selection(init_dict = init_dict)
+as_sel.ea_ops_from_dict(ea_dict)
+as_sel.init_population()
+as_sel.algorithm(as_sel)
 
 
-# generations = 200
-# pop_size = 100
-# indexes = [sp]
-# prtf_size = 20
-# start_date = '2010-01-01'
-# end_date = '2012-12-31'
-# objectives = (1, -1)
+# total_size = 0
+# for key in Portfolio.cache:  # Replace `lru_cache` with your actual LRU cache object
+#     df_memory = Portfolio.cache[key].memory_usage(deep=True).sum()  # Memory usage of DataFrame
+#     total_size += df_memory
+print(op.total_size(Portfolio.cache))
+# as_sel.save_to_pickle('cache_')
+exit()
 
-# as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
-# as_sel.mate = m.as_mate
-# as_sel.mutate = mut.as_mutate_all
-# as_sel.evaluate = e.evaluate
-# as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
-
-# test = Test_Run(as_sel, '2010-01-01', 3, 1)
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.run_next_opimization()
-# test.save_pkl('return_risk_size20')
-# exit()
+test = Test_Run(as_sel, '2010-01-01', 3, 1)
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.run_next_opimization()
+test.save_pkl('return_risk')
+exit()
 
 
 
@@ -398,9 +467,9 @@ as_vs_po_return_risk()
 # as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
 # as_sel.mate = m.as_mate
 # as_sel.mutate = mut.as_mutate_all
-# as_sel.evaluate = e.evaluate
+# as_sel.evaluate = e.return_risk
 # as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
+# as_sel.algorithm = a.base_algorithm
 
 # limit = Index_Asset_Limit(indexes, [5, 5])
 # as_sel.add_constraint(limit)
@@ -425,7 +494,7 @@ as_vs_po_return_risk()
 # as_sel.mutate = mut.as_mutate_all
 # as_sel.evaluate = e.sharpe_var
 # as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
+# as_sel.algorithm = a.base_algorithm
 
 # test = Test_Run(as_sel, '2010-01-01', 3, 1)
 # test.run_next_opimization()
@@ -443,9 +512,9 @@ as_vs_po_return_risk()
 # as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
 # as_sel.mate = m.as_mate
 # as_sel.mutate = mut.as_mutate_all
-# as_sel.evaluate = e.evaluate
+# as_sel.evaluate = e.return_risk
 # as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
+# as_sel.algorithm = a.base_algorithm
 
 # test = Test_Run(as_sel, '2010-01-01', 3, 1)
 # test.run_next_opimization()
@@ -500,9 +569,9 @@ test2.plot_all_test_runs(tracking_list = tracking_list)
 # as_sel = Asset_Selection(indexes, prtf_size, objectives, start_date, end_date, 0.5, 0.5, pop_size, generations)
 # as_sel.mate = m.as_mate
 # as_sel.mutate = mut.as_mutate
-# as_sel.evaluate = e.evaluate
+# as_sel.evaluate = e.return_risk
 # as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
+# as_sel.algorithm = a.base_algorithm
 
 # test = Test_Run(as_sel, '2010-01-01', 3, 1)
 # test.run_next_opimization()
@@ -527,7 +596,7 @@ test2.plot_all_test_runs(tracking_list = tracking_list)
 # as_sel.mutate = mut.as_mutate
 # as_sel.evaluate = e.sharpe_var
 # as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
+# as_sel.algorithm = a.base_algorithm
 
 # test = Test_Run(as_sel, '2010-01-01', 3, 1)
 # test.run_next_opimization()
@@ -552,7 +621,7 @@ test2.plot_all_test_runs(tracking_list = tracking_list)
 # as_sel.mutate = mut.as_mutate
 # as_sel.evaluate = e.sharpe_var
 # as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
+# as_sel.algorithm = a.base_algorithm
 
 # test = Test_Run(as_sel, '2010-01-01', 3, 1)
 # test.run_next_opimization()
@@ -641,7 +710,7 @@ test.plot_test_run(2)
 
 # obj.plot_min_max()
 # obj.plot_min_max_product()
-# obj.plot_2_objectives(obj.pareto_fronts)
+# obj.plot_objective_space(obj.pareto_fronts)
 # obj.plot_2_objectives_as_sel_vs_po(as_sel, po)
 
 
@@ -652,7 +721,7 @@ test.plot_test_run(2)
 
 # po.plot_min_max()
 # po.plot_min_max_product()
-# as_sel.plot_2_objectives(as_sel.pareto_fronts)
+# as_sel.plot_objective_space(as_sel.pareto_fronts)
 # po.plot_2_objectives_as_sel_vs_po(as_sel, po)
 
 
@@ -671,9 +740,9 @@ test.plot_test_run(2)
 
 # as_sel.mate = m.as_mate
 # as_sel.mutate = mut.as_mutate
-# as_sel.evaluate = e.evaluate
+# as_sel.evaluate = e.return_risk
 # as_sel.select = tools.selNSGA2
-# as_sel.algorithm = a.basic
+# as_sel.algorithm = a.base_algorithm
 
 # as_sel.init_population()
 # as_sel.algorithm(as_sel)
@@ -683,14 +752,14 @@ test.plot_test_run(2)
 
 # min_weight = Minimum_Weight()
 # po = Portfolio_Optimization([sp], 10, (1, -1), '2021-01-01', '2022-01-01', 0.4, 0.4, 250, 250)
-# po.get_assets(pkl_filename = 'final_prtf')
+# po.set_assets(pkl_filename = 'final_prtf')
 # po.add_constraint(min_weight)
 
 # po.select = tools.selNSGA2
 # po.mate = m.po_mate
 # po.mutate = mut.po_mutate
-# po.evaluate = e.evaluate
-# po.algorithm = a.basic
+# po.evaluate = e.return_risk
+# po.algorithm = a.base_algorithm
 
 # po.init_population()
 

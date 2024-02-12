@@ -128,16 +128,16 @@ class Fitness(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __deepcopy__(self, memo):
-        """Replace the basic deepcopy function with a faster one.
+    # def __deepcopy__(self, memo):
+    #     """Replace the basic deepcopy function with a faster one.
 
-        It assumes that the elements in the :attr:`values` tuple are
-        immutable and the fitness does not contain any other object
-        than :attr:`values` and :attr:`weights`.
-        """
-        copy_ = self.__class__()
-        copy_.wvalues = self.wvalues
-        return copy_
+    #     It assumes that the elements in the :attr:`values` tuple are
+    #     immutable and the fitness does not contain any other object
+    #     than :attr:`values` and :attr:`weights`.
+    #     """
+    #     copy_ = self.__class__()
+    #     copy_.wvalues = self.wvalues
+    #     return copy_
 
     def __str__(self):
         """Return the values of the Fitness object."""

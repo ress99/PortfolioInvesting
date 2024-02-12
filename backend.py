@@ -386,7 +386,7 @@ class Backend():
 
     def get_selected_inputs(self):
 
-        PRTF_SIZE = self.spinPrtfSize.value()
+        prtf_size = self.spinPrtfSize.value()
         bb_filepath = self.lineInputBBFile.text()
         if len(self.lineInputObjectives.text()) != 0:
             values = re.split(r'\s*,\s*', self.lineInputObjectives.text())
@@ -398,7 +398,7 @@ class Backend():
         start_date, end_date = str(self.startDateSelect.date().toPyDate()), str(self.endDateSelect.date().toPyDate())
         indexes = self.get_selected_indexes()
 
-        return indexes, PRTF_SIZE, objectives, start_date, end_date, CXPB, MUTPB, pop_size, generations, bb_filepath
+        return indexes, prtf_size, objectives, start_date, end_date, CXPB, MUTPB, pop_size, generations, bb_filepath
 
     def create_object(self):
 
@@ -480,7 +480,7 @@ class Backend():
             else:
                 self.labelObject.setText("Evolutionary Object:")
             self.labelIdxs.setText("Indexes: " + str(list(self.obj.indexes.keys())))
-            self.labelPrtfSizeInfo.setText("Portfolio Size: " + str(self.obj.PRTF_SIZE))
+            self.labelPrtfSizeInfo.setText("Portfolio Size: " + str(self.obj.prtf_size))
             self.labelObjectiveWeights.setText("Objective Weights: " + str(self.obj.objectives))
             self.labelStartDateInfo.setText("Start Date: " + self.obj.start_date)
             self.labelEndDateInfo.setText("End Date: " + self.obj.end_date)
@@ -789,9 +789,9 @@ class Backend_PO(Backend, Ui_PO):
                 return
             
             if 'pkl' in extension:
-                self.obj.get_assets(pkl_filename = filename)
+                self.obj.set_assets(pkl_filename = filename)
             if 'json' in extension:
-                self.obj.get_assets(json_filename = filename)
+                self.obj.set_assets(json_filename = filename)
 
 
 
