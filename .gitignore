@@ -6,3 +6,4 @@ __pycache__/
 *.ui
 launch.json
 main.py
+config.py
