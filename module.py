@@ -1,19 +1,21 @@
-from functools import partial
-import numpy as np
-import matplotlib.pyplot as plt
+"""Module class with methods and attributes present in all modules"""
+
 import random
 import os
-import plotly.graph_objects as go
-import logging
-import time
-import datetime
 import importlib.util
 import pickle
 from collections import Counter
 
+from functools import partial
+import numpy as np
+import matplotlib.pyplot as plt
 
-from deap import creator
-from deap import base
+import plotly.graph_objects as go
+# import logging
+# import time
+# import datetime
+# from deap import creator
+# from deap import base
 
 import data_op as op
 import config as c
@@ -22,51 +24,139 @@ from constraints import Constraint
 
 
 class Module:
+    """Parent Class with methods and attributes present in all modules"""
 
-    def register(self, alias, function, *args, **kargs):
+    def __init__(self):
+        """Placeholder initialization to be overridden by subclasses."""
 
-        pfunc = partial(function, *args, **kargs)
-        pfunc.__name__ = alias
-        pfunc.__doc__ = function.__doc__
+        if type(self) is Module:
+            raise TypeError("Module is an abstract class and cannot be instantiated directly.")
 
-        setattr(self, alias, pfunc)
+        self.pop = []
+        self.folder = None
+        self.attributes_list = []
 
-    def get_asset_weights(self, prtf, asset_weights, random_weights):
+        #Placeholder for pareto fronts and last pareto_front
+        self.pareto_fronts = []
+        self.pareto_front = []
 
-        # #Random weights
-        # if random_weights:
-        #     asset_weights = [random.random() for _ in range(len(prtf.asset_weights))]
-        #     prtf.asset_weights = asset_weights
-        #     prtf.normalize_asset_weights()
-        # #Same weights
-        # elif asset_weights is None:
-        #     prtf.apply_same_weights()
-        # #Specific weights
-        # else:
-        #     prtf.asset_weights = asset_weights
-        #     prtf.normalize_asset_weights()  
+        # Initialization attributes. Placeholders for the actual values.
+        self.filename = None
+        self.indexes = None
+        self.prtf_size = None
+        self.start_date = None
+        self.end_date = None
+        self.objectives = None
+        self.CXPB = None
+        self.MUTPB = None
+        self.pop_size = None
+        self.generations = None
+        self.constraints = []
+        self.bb_path = None
+        self.bb = None  # For the blackbox module
 
-        #Specific weights
+        # Initialize evolutionary operator attributes
+        self.mate = None
+        self.mutate = None
+        self.select = None
+        self.evaluate = None
+        self.algorithm = None
+
+
+    def register(self, alias, function, *args, **kwargs):
+        """
+        Dynamically registers a new method to the instance with a specified alias.
+
+        This method creates a new method for the instance by partially 
+        applying the given function with the provided arguments and keyword 
+        arguments. The new method is then bound to the instance under the specified alias.
+
+        Args:
+            alias (str): The name to assign to the dynamically created method.
+            function (callable): The function to partially apply and bind as a method.
+            *args: Positional arguments to pre-fill when the function is called.
+            **kwargs: Keyword arguments to pre-fill when the function is called.
+
+        Behavior:
+            - The created method is accessible as an attribute of the instance using 
+            the `alias` name.
+            - The method retains the original function's docstring for documentation purposes.
+            - The method's name is set to the `alias` for clarity and introspection.
+
+        Example:
+            def greet(name, greeting="Hello"):
+                return f"{greeting}, {name}!"
+
+            obj = Module()
+            obj.register("say_hello", greet, greeting="Hi")
+            print(obj.say_hello("Alice"))  # Output: "Hi, Alice!"
+        """
+
+        # Create a partially applied version of the function with the provided arguments
+        partial_function = partial(function, *args, **kwargs)
+
+        # Set the name and docstring of the partial function for clarity
+        partial_function.__name__ = alias
+        partial_function.__doc__ = function.__doc__
+
+        # Dynamically add the new method to the instance with the specified alias
+        setattr(self, alias, partial_function)
+
+
+    def get_asset_weights(self, prtf, asset_weights, random_weights = False):
+        """
+        Calculate asset weights for Portfolio.
+        If a list is provided as input, it will be used as the asset weights.
+        If random_weights is True, random weights will be generated.
+        If no input is provided, the weights will be equal for all assets.
+        """
+
+        #Apply specified weights
         if asset_weights is not None:
             prtf.asset_weights = asset_weights
-            prtf.normalize_asset_weights()  
+            prtf.normalize_asset_weights()
 
-        #Random weights
+        #Apply random weights if specified
         if random_weights:
             asset_weights = [random.random() for _ in range(len(prtf.asset_weights))]
             prtf.asset_weights = asset_weights
             prtf.normalize_asset_weights()
 
-        #Same weights
+        #If neither case, apply the same weights to all assets
         else:
             prtf.apply_same_weights()
 
+        return
 
 
-        return  
+    def init_portfolio_individual(
+        self,
+        assets = None,
+        asset_weights = None,
+        random_weights = False,
+        start_date = None,
+        end_date = None,
+        indexes = None
+        ):
+        """
+        Initializes an individual portfolio.
 
-    def init_Portfolio_Individual(self, assets = None, asset_weights = None, random_weights = False, start_date = None, end_date = None, indexes = None):
+        Args:
+            - assets (list, optional): List of asset names to include in the portfolio.
+            Defaults to None. If None, a random selection of assets will be used.
+            - asset_weights (list, optional): List of weights for the assets.
+            Defaults to None. Given as input to get_asset_weights
+            - random_weights (bool, optional): Whether to assign random weights to the assets.
+            Defaults to False. Given as input to get_asset_weights
+            - start_date (str, optional): Start date for the portfolio. Defaults to None.
+            - end_date (str, optional): End date for the portfolio. Defaults to None.
+            - indexes (list, optional): List of index objects to use. Defaults to None.
 
+        Returns:
+            Portfolio: A Portfolio object initialized with the specified parameters.
+        """
+
+        #If no input is provided, use the default values
         if start_date is None:
             start_date = self.start_date
         if end_date is None:
@@ -74,166 +164,246 @@ class Module:
         if indexes is None:
             indexes = self.index_objects
 
-        prtf = Portfolio(indexes, cardinality_constraint=self.prtf_size, start_date = start_date, end_date = end_date)
+        #Create a new Portfolio object
+        prtf = Portfolio(
+            indexes,
+            cardinality_constraint=self.prtf_size,
+            start_date = start_date,
+            end_date = end_date
+            )
+
         prtf.fitness = self.objectives
 
+        #If assets are not provided, randomly select them from the available assets
         if assets is None:
             prtf.prtf_dict = random.sample(self.all_assets, self.prtf_size)
+        #If provided, use the given assets
         else:
             prtf.prtf_dict = assets
 
+        #Assign weights to assets
         self.get_asset_weights(prtf, asset_weights, random_weights)
 
         return prtf
 
-    def dominates(self, A, B):
 
-        is_strictly_better_in_at_least_one_dimension = False
+    def dominates(self, A, B):
+        """
+        Determines whether one solution dominates another in a multi-objective optimization context.
+
+        A solution A dominates solution B if:
+            - A is at least as good as B in all objectives.
+            - A is strictly better than B in at least one objective.
+
+        Args:
+            A (iterable): A list or tuple representing the objective values of solution A.
+            B (iterable): A list or tuple representing the objective values of solution B.
+
+        Returns:
+            bool: True if A dominates B, False otherwise.
+        """
+
+        strictly_better_boolean = False
         for a, b in zip(A, B):
             if a < b:
+                # A is worse than B in at least one objective
                 return False
             elif a > b:
-                is_strictly_better_in_at_least_one_dimension = True
-                
-        return is_strictly_better_in_at_least_one_dimension
+                # A is better in at least one objective
+                strictly_better_boolean = True
+
+        return strictly_better_boolean
+
 
     def find_non_dominant(self):
+        """
+        Identifies the non-dominated individuals in a population 
+        based on multi-objective optimization.
+
+        A solution is considered non-dominated if no other solution in the population dominates it.
+
+        Args:
+            pop (list, optional): A list of individuals to evaluate. 
+            If None, defaults to `self.pop`.
+
+        Returns:
+            list: A list of non-dominated individuals from the population.
+        """
+
         non_dominant = []
         #Get population as input parameter
 
-        for i, ind_A in enumerate(self.pop):
+        for i, ind_a in enumerate(self.pop):
             is_dominated = False
-            for j, ind_B in enumerate(self.pop):
+            for j, ind_b in enumerate(self.pop):
                 if i != j:
-                    if self.dominates(ind_B.fitness.wvalues, ind_A.fitness.wvalues):
+                    if self.dominates(ind_b.fitness.wvalues, ind_a.fitness.wvalues):
                         is_dominated = True
                         break
             if not is_dominated:
-                non_dominant.append(ind_A)
+                non_dominant.append(ind_a)
 
         return non_dominant
-    
+
+
     def get_invalid_inds(self, pop):
+        """Gets invalid individuals from the population.
+        Args:
+            pop (list): Population of individuals."""
         return [ind for ind in pop if not ind.fitness.valid]
-    
+
+
+    def remove_invalids(self, pop = None):
+        """Loops through population and removes invalid individuals."""
+
+        return [ind for ind in pop if not ind.invalid]
+
+
     def get_pop(self, pop):
+        """Retrieves population from object."""
 
         if pop is None:
-            pop = self.pop   
+            pop = self.pop
         return pop
 
     def evaluate_population(self, pop = None):
+        """Gets population and evaluates it."""
 
         pop = self.get_pop(pop)
         list(map(self.evaluate, pop))
 
-        return
-    
+    #To be implemented in subclass
+    def clone(self, ind):
+        """Non-implemented method"""
+        raise NotImplementedError("Subclasses must implement `clone`.")
+
     def clone_population(self, pop = None):
+        """Clones population of object and returns it as a list"""
 
         pop = self.get_pop(pop)
         return [self.clone(ind) for ind in pop]
 
     def asset_list_counter(self, pop = None):
+        """Sorts the asset list of the population and counts 
+        the number of times each asset appears."""
 
         pop = self.get_pop(pop)
         counter = Counter([tuple(sorted(i.asset_list)) for i in pop])
-        
+
         return counter
 
+
     def apply_constraints(self, pop = None):
+        """For each individual in the population, applies the constraints
+        and returns the population."""
 
         pop = self.get_pop(pop)
         for constraint in self.constraints:
-            [constraint.apply_constraint(ind) for ind in pop]
+            _ = [constraint.apply_constraint(ind) for ind in pop]
         return self.remove_invalids(pop)
 
-    def remove_invalids(self, pop = None):
-
-        return [ind for ind in pop if not ind.invalid]
-
-    def plot_paretos(self):
-
-        fig = go.Figure()
-        for i in self.pareto_fronts[:-1]:
-            fig.add_trace(go.Scatter(x=i[:, 0], 
-                                    y=i[:, 1], 
-                                    mode = 'markers + lines',
-                                    marker = dict(size=5, color='black')
-                                    ))
-        fig.add_trace(go.Scatter(x=self.pareto_fronts[-1][:, 0], 
-                                y=self.pareto_fronts[-1][:, 1], 
-                                mode = 'markers + lines',
-                                marker = dict(size=8, color='red')
-                                ))
-        fig.update_layout(title='Portfolios',
-                        xaxis_title='Return',
-                        yaxis_title='Variance',
-                        width = 900,
-                        height = 700
-                        )
-        fig.show()
 
     def read_pickle(self, filename, folder):
-        
+        """Reads pickle and extracts its data"""
+
+        # Check if the folder is valid
         if folder not in [c.as_folder, c.po_folder]:
             print('Invalid folder')
             return
 
-        pickle_data = self.get_pickle_data(filename, folder)
-        
+        #Gets raw pickle data
+        pickle_data = self.get_pickle_raw_data(filename, folder)
+
+        #Converts raw data into object from class and returns it
         return self.get_data_from_pickle(pickle_data)
 
 
-    def get_pickle_data(self, filename, folder = None):
-        
+    #To be implemented in subclass
+    def get_data_from_pickle(self, pickle_data):
+        """Non-implemented method"""
+        raise NotImplementedError("Subclasses must implement `clone`.")
+
+
+    def get_pickle_raw_data(self, filename, folder = None):
+        """Opens pickle file and returns the raw data"""
+
         filename_pkl = filename + '.pkl'
         folder_names = [c.prtf_folder, folder, filename_pkl]
         with open(os.path.join(*folder_names), 'rb') as file:
             pickle_data = pickle.load(file)
-        
-        return pickle_data
-    
-    def save_pkl(self, data_to_pickle, f_pkl):
 
-        pkl_folder_names = [c.prtf_folder, self.folder, f_pkl]
+        return pickle_data
+
+
+    def save_to_pickle(self, filename = None):
+        """
+        Takes the name of the filename and the object's data.
+        
+        Saves the data to a pickle file in the specified folder.
+
+        Args:
+            filename (str): Name of the file to save the data to.
+        
+        Returns: 
+            None
+        """
+
+        #Gets filename for pickle file
+        pkl_filename = op.get_pickle_filename(filename)
+
+        #Gets object data to save in pickle format
+        data_to_pickle = self.get_data_to_pickle()
+
+        #Saves the data to a pickle file
+        self.save_pkl(data_to_pickle, pkl_filename)
+
+        return
+
+
+    def save_pkl(self, data_to_pickle, pkl_filename):
+        """Saves data to a pickle file"""
+
+        pkl_folder_names = [c.prtf_folder, self.folder, pkl_filename]
         with open(os.path.join(*pkl_folder_names), 'wb') as file:
             pickle.dump(data_to_pickle, file)
 
         return
 
-    def save_to_pickle(self, filename = None):
 
-        f_pkl = op.get_pickle_filename(filename)
-        data_to_pickle = self.get_data_to_pickle()
-
-        self.save_pkl(data_to_pickle, f_pkl)
-        
-        return
-    
     def get_data_to_pickle(self):
+        """
+        Prepares the object's data for serialization into a pickle file.
 
+        This method extracts the object's initialization data, evolutionary operators 
+        and additional object attributes and saves them in a dictionary.
+
+        Returns:
+            dict: A dictionary containing the following keys:
+                - "init_data": A dictionary with the object's initialization attributes.
+                - "ea_ops": A dictionary with the evolutionary operators of the object.
+                - Additional attributes specified in `self.attributes_list`.
+        """
+
+        #Extracts initial data and evolutionary operators from instance
         init_data = self.init_data_to_dict()
         ea_ops = self.ea_ops_to_dict()
-        
+
+        #Converts data to a dictionary
         data_to_pickle = {"init_data": init_data, 'ea_ops': ea_ops}
-        data_to_pickle = self.add_attributes_to_dict(self.attributes_list, data_to_pickle)
-        
-        return data_to_pickle
-    
-    def add_attributes_to_dict(self, attributes, data_to_pickle):
 
-        for attr in attributes:
-            if hasattr(self, attr):
-                data_to_pickle[attr] = getattr(self, attr)
+        #Adds additional object attributes to the dictionary
+        data_to_pickle = self.add_obj_attributes_to_dict(self.attributes_list, data_to_pickle)
+
         return data_to_pickle
 
-    def get_attributes_from_dict(self, attributes, pickle_data):
-        for attr in attributes:
-            if attr in pickle_data:
-                setattr(self, attr, pickle_data[attr])
 
     def init_data_to_dict(self):
+        """
+        Extracts initial data from the object and returns it as a dictionary.
+
+        Returns:
+            dict: Dictionary with the initialization attributes
+        """
 
         init_data = {"indexes": list(self.indexes.values()), "prtf_size": self.prtf_size, "objectives": self.objectives, 
             "start_date": self.start_date, "end_date": self.end_date, 
@@ -243,14 +413,111 @@ class Module:
             "filename": self.filename}
         
         return init_data
-    
-    def init_data_from_dict(self, dictionary):
 
+
+    def ea_ops_to_dict(self):
+        """
+        Goes through evolutionary attributes of the object.
+
+        If the attribute is present, it adds it to the dictionary.
+
+        Returns:
+            dict: Dictionary with the evolutionary attributes and their values.
+        """
+        ea_ops_data = {}
+
+        if hasattr(self, 'mate'):
+            ea_ops_data['mate'] = self.mate
+        if hasattr(self, 'mutate'):
+            ea_ops_data['mutate'] = self.mutate
+        if hasattr(self, 'select'):
+            ea_ops_data['select'] = self.select
+        if hasattr(self, 'evaluate'):
+            ea_ops_data['evaluate'] = self.evaluate
+        if hasattr(self, 'algorithm'):
+            ea_ops_data['algorithm'] = self.algorithm
+
+        return ea_ops_data
+
+
+    def add_obj_attributes_to_dict(self, attributes, data_to_pickle):
+        """
+        Adds attributes of the object to a dictionary.
+
+        This method iterates through the object's attributes, check if they exist,
+        and retrieves its value to the provided dictionary.
+
+        Args:
+            attributes (list): A list of attribute names (strings) to add to the dictionary.
+            data_to_pickle (dict): The dictionary to which the attributes will be added.
+
+        Returns:
+            dict: The updated dictionary containing the specified attributes and their values.
+        """
+
+        #Loops through attributes
+        for attr in attributes:
+            #Checks their existance in the object
+            if hasattr(self, attr):
+                #If they exist, adds them to the dictionary
+                data_to_pickle[attr] = getattr(self, attr)
+
+        return data_to_pickle
+
+
+    def init_from_file(self, filename):
+        """
+        Initializes self object from a pickle file.
+
+        This method reads data from a pickle file, extracts initialization attributes, 
+        evolutionary operators, and additional attributes, and sets them on the object.
+
+        Args:
+            filename (str): The name of the pickle file (without the `.pkl` extension) 
+                            from which to load the object's data.
+
+        Returns:
+            None: The method modifies the object's attributes in place.
+        """
+
+        #Extracts raw data from pickle file
+        pickle_data = self.get_pickle_raw_data(filename, self.folder)
+
+        #Extracts initialization variables from pickle dictionary
+        (indexes, prtf_size, objectives, start_date, end_date,
+         bb_path, CXPB, MUTPB, pop_size, generations, _
+         ) = self.get_init_data_from_dict(pickle_data['init_data'])
+
+        #Store initialization attributes on self object
+        self.init_attributes(indexes, prtf_size, objectives, start_date, end_date, 
+                             bb_path, CXPB, MUTPB, pop_size, generations, filename)
+        #Store evolutionary operators on self object
+        self.ea_ops_from_dict(pickle_data)
+        #Store additional attributes on self object
+        self.get_attributes_from_dict(self.attributes_list, pickle_data)
+
+        return
+
+
+    def get_init_data_from_dict(self, dictionary):
+        """
+        Extracts initialization variables from pickle dictionary.
+
+        Args:
+            dictionary (dict): Initialization dictionary
+
+        Returns:
+            tuple: A tuple containing all the initialization attributes.
+        """
+
+        #Extract certain attributes from the dictionary
         indexes = dictionary['indexes']
         prtf_size = dictionary['prtf_size']
         objectives = dictionary['objectives']
         start_date = dictionary['start_date']
         end_date = dictionary['end_date']
+
+        #Check if additional attributes exist in the dictionary
         if 'pop_size' in dictionary.keys():
             pop_size = dictionary['pop_size']
         else:
@@ -276,30 +543,31 @@ class Module:
         else:
             MUTPB = None
 
-        
-        return indexes, prtf_size, objectives, start_date, end_date, bb_path, CXPB, MUTPB, pop_size, generations, filename
-    
-    def ea_ops_to_dict(self):
-        ea_ops_data = {}
+        return (indexes, prtf_size, objectives, start_date, end_date, 
+                bb_path, CXPB, MUTPB, pop_size, generations, filename)
 
-        if hasattr(self, 'mate'):
-            ea_ops_data['mate'] = self.mate
-        if hasattr(self, 'mutate'):
-            ea_ops_data['mutate'] = self.mutate
-        if hasattr(self, 'select'):
-            ea_ops_data['select'] = self.select
-        if hasattr(self, 'evaluate'):
-            ea_ops_data['evaluate'] = self.evaluate
-        if hasattr(self, 'algorithm'):
-            ea_ops_data['algorithm'] = self.algorithm
 
-        return ea_ops_data
+    def ea_ops_from_dict(self, pickle_data):
+        """
+        Loads evolutionary operators from pickle dictionary and assigns them to self object.
 
-    def ea_ops_from_dict(self, ea_dict):
+        This method checks if the provided dictionary contains evolutionary operators.. 
+        If so, it assigns them to the corresponding attributes of the object.
 
-        if 'ea_ops' in ea_dict:
-            ea_dict = ea_dict['ea_ops']
+        Args:
+            pickle_data (dict): Dictionary containing data from a pickle file.
 
+        Returns:
+            None: The method modifies the object's attributes in place.
+        """
+
+        #If evolutionary operators are present in pickle, save dictionary
+        if 'ea_ops' in pickle_data:
+            ea_dict = pickle_data['ea_ops']
+        else:
+            return
+
+        #For each operator, checks if they exist and store them in self object
         if 'mate' in ea_dict:
             self.mate = ea_dict['mate']
         if 'mutate' in ea_dict:
@@ -315,7 +583,17 @@ class Module:
 
     def init_attributes(self, indexes, prtf_size, objectives, start_date, end_date, 
                         bb_path, CXPB, MUTPB, pop_size, generations, filename):
-            
+        """
+        Receives initialization attributes and stores them in self object
+
+        Args:
+            Initialization attributes.
+
+        Returns:
+            None: The method stores the object's attributes in place.
+        """
+
+        #Sets the attributes to the self object
         self.filename = filename
         self.indexes = indexes
         self.prtf_size = prtf_size
@@ -331,46 +609,147 @@ class Module:
         if bb_path is not None:
             self.import_blackbox_module(bb_path)
 
-    def init_from_file(self, filename):
 
-        pickle_data = self.get_pickle_data(filename, self.folder)
+    def get_attributes_from_dict(self, attributes, pickle_data):
+        """
+        Sets the object's attributes based on a dictionary.
 
-        (indexes, prtf_size, objectives, start_date, end_date, 
-         bb_path, CXPB, MUTPB, pop_size, generations, _) = self.init_data_from_dict(pickle_data['init_data'])
+        This method iterates through a list of attribute names, checks if each attribute exists 
+        in the provided dictionary, and, if so, sets the corresponding attribute in the object.
 
-        self.init_attributes(indexes, prtf_size, objectives, start_date, end_date, 
-                             bb_path, CXPB, MUTPB, pop_size, generations, filename)
+        Args:
+            attributes (list): A list of attribute names (strings) to check and set in the object.
+            pickle_data (dict): A dictionary containing attribute names as keys and their values.
         
-        self.ea_ops_from_dict(pickle_data)
-        self.get_attributes_from_dict(self.attributes_list, pickle_data)
+        Returns:
+            None: The method modifies the object's attributes in place.
+        """
 
-        return
+
+        #Loops through attributes
+        for attr in attributes:
+            #Checks their existance in the object
+            #If they exist, adds them to the instance
+            if attr in pickle_data:
+                setattr(self, attr, pickle_data[attr])
 
 
     def add_constraint(self, constraint):
+        """
+        Adds a constraint to the list of constraints.
 
+        Args:
+            constraint (Constraint): The constraint object to be added.
+
+        Returns:
+            None: The method modifies the `constraints` list in place.
+        """
+
+        #Checks if the constraint is a valid object
         if isinstance(constraint, Constraint):
+            #If so, adds it to the list of constraints
             self.constraints.append(constraint)
-    
+
+
     def normalize(self, value, min_val, max_val):
+        """
+        Scales value based on the provided minimum and maximum values, 
+        returning a normalized value in the range [0, 1].
+        """
+
         return (value - min_val) / (max_val - min_val)
-    
-    def get_normalized_pareto_fronts(self):
 
-        all_returns = [individual[0] for generation in self.pareto_fronts for individual in generation]
-        max_return, min_return = max(all_returns), min(all_returns)
-        all_risks = [individual[1] for generation in self.pareto_fronts for individual in generation]
-        max_risk, min_risk = max(all_risks), min(all_risks)
 
-        composite = []
-        for generation in self.pareto_fronts:
-            normalized_returns = [self.normalize(individual[0], min_return, max_return) for individual in generation]
-            normalized_risks = [self.normalize(individual[1], min_risk, max_risk) for individual in generation]
+    def run_method(self, method, *args, **kwargs):
+        """
+        Dynamically calls a method from the blackbox module (`bb`) with the provided arguments.
 
-            composite_metric = [ret * risk for ret, risk in zip(normalized_returns, normalized_risks)]
-            composite.append(composite_metric)
-        
-        return composite
+        Args:
+            method (str): The name of the method to call from the blackbox module.
+            *args: Positional arguments to pass to the method.
+            **kwargs: Keyword arguments to pass to the method.
+
+        Returns:
+            Any: The result of the called method.
+        """
+
+        #Checks if self has the blackbox module
+        if hasattr(self.bb, method):
+            # Get the method from self.bb
+            method_to_call = getattr(self.bb, method)
+            # Call the method with the provided arguments and keyword arguments
+            return method_to_call(*args, **kwargs)
+        else:
+            raise AttributeError(f"{method} not found in bb.")
+
+
+    def import_blackbox_module(self, module_path):
+
+        if module_path == "":
+            return -1
+        spec = importlib.util.spec_from_file_location("blackbox_module", module_path)
+        self.bb = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(self.bb)
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+
+
+    def set_bb_algorithm(self):
+
+        if hasattr(self, 'bb'):
+            self.algorithm = self.bb.algorithm
+        else:
+            print('Please select a BlackBox module.')
+
+    @property
+    def final_prtf(self):
+        return self._final_prtf
+
+
+    @final_prtf.setter
+    def final_prtf(self, ind):
+
+        if isinstance(ind, Portfolio):
+            self._final_prtf = ind
+        else:
+            print('Please choose a valid individual')
+
+    @final_prtf.deleter
+    def final_prtf(self):
+        if hasattr(self, '_final_prtf'):
+            delattr(self, '_final_prtf')
+
+    @property
+    def indexes(self):
+        return self._indexes
+
+
+    @indexes.setter
+    def indexes(self, idxs):
+        self._indexes = {i.name: i for i in idxs}
+
+
+    @property
+    def index_objects(self):
+        return list(self._indexes.values())
+
+    @property
+    def all_assets(self):
+        assets = []
+        aux_list = [list(i) for i in self.indexes.values()]
+        _ = [assets.extend(i) for i in aux_list]
+        return assets
+
+    @property
+    def bb_mode(self):
+        if self.bb_path is None:
+            return False
+        else: 
+            return True
+
+
+    #Visualization methods
 
     def plot_min_max_product(self):
 
@@ -394,6 +773,24 @@ class Module:
         return
 
 
+    def get_normalized_pareto_fronts(self):
+
+        all_returns = [individual[0] for generation in self.pareto_fronts for individual in generation]
+        max_return, min_return = max(all_returns), min(all_returns)
+        all_risks = [individual[1] for generation in self.pareto_fronts for individual in generation]
+        max_risk, min_risk = max(all_risks), min(all_risks)
+
+        composite = []
+        for generation in self.pareto_fronts:
+            normalized_returns = [self.normalize(individual[0], min_return, max_return) for individual in generation]
+            normalized_risks = [self.normalize(individual[1], min_risk, max_risk) for individual in generation]
+
+            composite_metric = [_return * risk for _return, risk in zip(normalized_returns, normalized_risks)]
+            composite.append(composite_metric)
+        
+        return composite
+
+
     def standard_labels(self, title, xlabel, ylabel):
 
         if title is None:
@@ -404,6 +801,30 @@ class Module:
             ylabel = 'Risk'
 
         return title, xlabel, ylabel
+
+
+    def plot_paretos(self):
+
+        fig = go.Figure()
+        for i in self.pareto_fronts[:-1]:
+            fig.add_trace(go.Scatter(x=i[:, 0],
+                                    y=i[:, 1],
+                                    mode = 'markers + lines',
+                                    marker = dict(size=5, color='black')
+                                    ))
+        fig.add_trace(go.Scatter(x=self.pareto_fronts[-1][:, 0],
+                                y=self.pareto_fronts[-1][:, 1],
+                                mode = 'markers + lines',
+                                marker = dict(size=8, color='red')
+                                ))
+        fig.update_layout(title='Portfolios',
+                        xaxis_title='Return',
+                        yaxis_title='Variance',
+                        width = 900,
+                        height = 700
+                        )
+        fig.show()
+
 
     def plot_min_max(self):
 
@@ -439,17 +860,40 @@ class Module:
         plt.show()
 
         return
-    
-    def remove_bounds(self, remove = False, min_values = [0, 0], max_values = [1000, 1000]):
 
+
+    def remove_bounds(self, remove = False, min_values = None, max_values = None):
+        """
+        Remove out-of-bounds values from the pareto fronts.
+
+        Args:
+            remove (bool): Boolean indicating whether to remove out-of-bounds values.
+            min_values (list, optional): Minimum values for each objective. Defaults to None.
+            max_values (list, optional): Maximum values for each objective. Defaults to None.
+
+        Returns:
+            Any: Pareto fronts with out-of-bounds values removed if `remove` is True
+        """
+
+        #If min and max values were not provided, set them to default values
+        if min_values is None:
+            min_values = [0, 0]
+        if max_values is None:
+            max_values = [1000, 1000]
+
+        #If remove is False, return the pareto fronts
         if not remove:
             return self.pareto_fronts
 
+        #If remove is True, filter the pareto fronts based on the provided min and max values
         arr_list = [None] * len(self.pareto_fronts)
         for idx, arr in enumerate(self.pareto_fronts):
-            arr_list[idx] = np.array([i for i in arr if all(min_v <= val <= max_v for val, (min_v, max_v) in zip(i, zip(min_values, max_values)))])
+            arr_list[idx] = np.array([i for i in arr if
+                                      all(min_v <= val <= max_v for val, (min_v, max_v) 
+                                          in zip(i, zip(min_values, max_values)))])
+
         return arr_list
-        
+
 
     def plot_2_objectives_as_sel_vs_po(self, as_sel, po, title = None, xlabel = None, ylabel = None):
 
@@ -521,9 +965,11 @@ class Module:
         plt.legend()
         plt.show()
 
+
     def plot_objective_space_test(self, years = None, months = None, start_date = None, end_date = None, pareto_front = None, title = None, xlabel = None, ylabel = None):
 
         if pareto_front is None:
+            #
             pareto_front = self.pareto_front
 
         if years is not None or months is not None:
@@ -533,13 +979,12 @@ class Module:
         elif start_date is None and end_date is None:
             return
 
-        print(start_date, end_date)
         title, xlabel, ylabel = self.standard_labels(title, xlabel, ylabel)
 
         prtf_list = []
         for old_prtf in pareto_front:
 
-            prtf = self.init_Portfolio_Individual(assets = old_prtf.asset_list, 
+            prtf = self.init_portfolio_individual(assets = old_prtf.asset_list, 
                                                   asset_weights = old_prtf.asset_weights,
                                                   start_date = start_date, end_date = end_date, 
                                                   indexes = old_prtf.index_objects)
@@ -547,16 +992,20 @@ class Module:
             
 
         returns = [i.portfolio_return() for i in prtf_list]
-        MDDs = [i.MDD() for i in prtf_list]
+        MDDs = [i.maximum_drawdown() for i in prtf_list]
         plt.scatter(MDDs, returns, color = 'blue', marker = 'o', label = 'Pareto Front')
-        # for idx in range(len(returns)):
-        #     if idx == 1:
-        #         plt.plot(MDDs[idx], returns[idx], color = 'blue', marker = 'o', label = 'Pareto Front')
-        #     else:
-        #         plt.plot(MDDs[idx], returns[idx], color = 'blue', marker = 'o')
 
         index_prtf = prtf_list[0].get_index_portfolio(prtf_list[0].index_objects, start_date, end_date)
-        plt.scatter(index_prtf.MDD(), index_prtf.portfolio_return(), color = 'red', marker = 'o', label = 'Index')
+        plt.scatter(index_prtf.maximum_drawdown(), index_prtf.portfolio_return(), color = 'red', marker = 'o', label = 'Index')
+
+        plt.axvline(x=index_prtf.maximum_drawdown(), color='black', linestyle='--', lw=1.5)
+        plt.axhline(y=index_prtf.portfolio_return(), color='black', linestyle='--', lw=1.5)
+
+        plt.text(5, 5, 'Q1', fontsize=12, verticalalignment='center', horizontalalignment='center')
+        plt.text(-5, 5, 'Q2', fontsize=12, verticalalignment='center', horizontalalignment='center')
+        plt.text(-5, -5, 'Q3', fontsize=12, verticalalignment='center', horizontalalignment='center')
+        plt.text(5, -5, 'Q4', fontsize=12, verticalalignment='center', horizontalalignment='center')
+
 
         plt.xlabel('Maximum Drawdown')
         plt.ylabel('Return')
@@ -565,43 +1014,68 @@ class Module:
         plt.grid(True)
         plt.show()
 
+        self.calculate_quadrant_percentages([[MDDs[i], returns[i]] for i in range(len(MDDs))], [index_prtf.maximum_drawdown(), index_prtf.portfolio_return()])
+
+    def calculate_quadrant_percentages(self, points, origin):
+        
+        quadrant_counts = {'Q1': 0, 'Q2': 0, 'Q3': 0, 'Q4': 0}
+        
+        for point in points:
+            relative_x = point[0] - origin[0]
+            relative_y = point[1] - origin[1]
+            
+            if relative_x > 0 and relative_y > 0:
+                quadrant_counts['Q1'] += 1
+            elif relative_x < 0 and relative_y > 0:
+                quadrant_counts['Q2'] += 1
+            elif relative_x < 0 and relative_y < 0:
+                quadrant_counts['Q3'] += 1
+            elif relative_x > 0 and relative_y < 0:
+                quadrant_counts['Q4'] += 1
+
+        total_points = len(points)
+        quadrant_percentages = {key: (value / total_points) * 100 for key, value in quadrant_counts.items()}
+        print(quadrant_percentages)
+
+        return quadrant_percentages
 
 
-    def plot_all_returns(self, pareto_front = None, start_date = None, end_date = None):
+    # def plot_all_returns(self, pareto_front = None, start_date = None, end_date = None):
 
-        if pareto_front is None:
-            pareto_front = self.pareto_front
-        if start_date is None:
-            start_date = self.start_date
-        if end_date is None:
-            end_date = self.end_date
+    #     if pareto_front is None:
+    #         pareto_front = self.pareto_front
+    #     if start_date is None:
+    #         start_date = self.start_date
+    #     if end_date is None:
+    #         end_date = self.end_date
 
-        #TODO: Clone
-        first_label = True
-        for old_prtf in pareto_front:
-            prtf = Portfolio(list(old_prtf.indexes.values()), cardinality_constraint=old_prtf.cardinality_constraint, start_date = start_date, end_date = end_date)
-            prtf.prtf_dict = old_prtf.asset_list
-            prtf.asset_weights = old_prtf.asset_weights
-            df_to_plot = prtf.get_prtf_return_df()
-            if first_label:
-                plt.plot(df_to_plot.index, df_to_plot.values, label = 'Portfolios', color = '#007be0', alpha = 0.8)
-                first_label = False
-            else:
-                plt.plot(df_to_plot.index, df_to_plot.values, color = '#007be0', alpha = 0.65)
+    #     #Do Clone
+    #     first_label = True
+    #     for old_prtf in pareto_front:
+    #         prtf = Portfolio(list(old_prtf.indexes.values()), cardinality_constraint=old_prtf.cardinality_constraint, start_date = start_date, end_date = end_date)
+    #         prtf.prtf_dict = old_prtf.asset_list
+    #         prtf.asset_weights = old_prtf.asset_weights
+    #         df_to_plot = prtf.get_prtf_return_df()
+    #         if first_label:
+    #             plt.plot(df_to_plot.index, df_to_plot.values, label = 'Portfolios', color = '#007be0', alpha = 0.8)
+    #             first_label = False
+    #         else:
+    #             plt.plot(df_to_plot.index, df_to_plot.values, color = '#007be0', alpha = 0.65)
 
-        index_prtf = old_prtf.get_index_portfolio(list(self.indexes.values()), start_date = start_date, end_date = end_date)
-        df_to_plot = index_prtf.get_prtf_return_df()
-        plt.plot(df_to_plot.index, df_to_plot.values, label = 'Index', color = 'red')
+    #     index_prtf = old_prtf.get_index_portfolio(list(self.indexes.values()), start_date = start_date, end_date = end_date)
+    #     df_to_plot = index_prtf.get_prtf_return_df()
+    #     plt.plot(df_to_plot.index, df_to_plot.values, label = 'Index', color = 'red')
 
 
-        plt.xlabel('Date')
-        plt.ylabel('Return')
-        # plt.title('Test Run Returns')
-        plt.xticks(rotation=45)
-        plt.subplots_adjust(bottom=0.2)
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+    #     plt.xlabel('Date')
+    #     plt.ylabel('Return')
+    #     # plt.title('Test Run Returns')
+    #     plt.xticks(rotation=45)
+    #     plt.subplots_adjust(bottom=0.2)
+    #     plt.legend()
+    #     plt.grid(True)
+    #     plt.show()
+
 
     def plot_pareto_fronts_evolution(self, generations, arr_list = None):
 
@@ -620,75 +1094,3 @@ class Module:
         plt.grid()
         plt.legend()
         plt.show()
-
-
-    def import_blackbox_module(self, module_path):
-    
-        if module_path == "":
-            return -1
-        spec = importlib.util.spec_from_file_location("blackbox_module", module_path)
-        self.bb = importlib.util.module_from_spec(spec)
-        try:
-            spec.loader.exec_module(self.bb)
-        except FileNotFoundError as e:
-            print(f"Error: {e}")
-
-    def run_method(self, method, *args, **kwargs):
-
-        if hasattr(self.bb, method):
-            # Get the method from self.bb
-            method_to_call = getattr(self.bb, method)
-            # Call the method with the provided arguments and keyword arguments
-            return method_to_call(*args, **kwargs)
-        else:
-            raise AttributeError(f"{method} not found in bb.")
-        
-    def set_bb_algorithm(self):
-
-        if hasattr(self, 'bb'):
-            self.algorithm = self.bb.algorithm
-        else:
-            print('Please select a BlackBox module.')
-
-    @property
-    def final_prtf(self):
-        return self._final_prtf
-    
-    @final_prtf.setter
-    def final_prtf(self, ind):
-
-        if isinstance(ind, Portfolio):
-            self._final_prtf = ind
-        else:
-            print('Please choose a valid individual')
-
-    @final_prtf.deleter
-    def final_prtf(self):
-        if hasattr(self, '_final_prtf'):
-            delattr(self, '_final_prtf')
-
-    @property
-    def indexes(self):
-        return self._indexes
-    
-    @indexes.setter
-    def indexes(self, idxs):
-        self._indexes = {i.name: i for i in idxs}
-
-    @property
-    def index_objects(self):
-        return list(self._indexes.values())
-
-    @property
-    def all_assets(self):
-        assets = []
-        aux_list = [list(i) for i in self.indexes.values()]
-        [assets.extend(i) for i in aux_list]
-        return assets
-    
-    @property
-    def bb_mode(self):
-        if self.bb_path is None:
-            return False
-        else: 
-            return True
