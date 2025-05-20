@@ -1,14 +1,37 @@
-import random
-import numpy as np
+"""Module with algorithm implementations"""
+
 import time
+import random
 from collections import Counter
-# from deap import base
+import numpy as np
+
 
 counter = Counter()
 
 def base_algorithm(obj):
+    """
+    Implementation of a base Genetic Algorithm.
 
-    # toolbox = base.Toolbox()
+    This function performs a genetic algorithm to optimize a portfolio. It iteratively evolves 
+    a population of portfolio individuals over a specified number of generations, applying 
+    selection, crossover, mutation, and constraints to improve the population's fitness.
+
+    Args:
+        obj: An object that encapsulates the genetic algorithm's parameters, methods, and 
+             population. It must have the following attributes and methods:
+             - Attributes:
+                 - generations (int): Number of generations to run the algorithm.
+                 - CXPB (float): Crossover probability.
+                 - MUTPB (float): Mutation probability.
+                 - pop (list): Current population of individuals.
+                 - pop_size (int): Size of the population.
+                 - assets (optional): List of assets for portfolio construction.
+
+    Returns:
+        None: The function modifies the `obj` in place by updating its population, Pareto fronts, 
+              and final Pareto front.
+    """
+
 
     # Apply contraints and evaluate initial population
     obj.apply_constraints()
@@ -31,12 +54,12 @@ def base_algorithm(obj):
 
         # Clone the selected individuals, AS or PO
         if not hasattr(obj, 'assets'):
-            # offspring2 = [toolbox.clone(ind) for ind in offspring]   
             offspring = obj.clone_population(offspring)
 
         else:
             pop_weights = [i.asset_weights for i in offspring]
-            offspring = list(obj.init_Portfolio_Individual(assets = obj.assets, asset_weights = i) for i in pop_weights)
+            offspring = list(obj.init_portfolio_individual
+                             (assets = obj.assets, asset_weights = i) for i in pop_weights)
 
         # Apply crossover on the offspring
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
@@ -60,12 +83,12 @@ def base_algorithm(obj):
                 del mutant.fitness.values
 
         # Normalize the weights of all the portfolios
-        [ind.normalize_asset_weights() for ind in offspring]
+        _ = [ind.normalize_asset_weights() for ind in offspring]
 
         # Apply constraints in the module
         obj.apply_constraints(offspring)
         # c = Counter([tuple(sorted(i.asset_list)) for i in offspring])
-        
+
         # Evaluate the individuals without a valid fitness
         invalid_ind = obj.get_invalid_inds(offspring)
         obj.evaluate_population(invalid_ind)
@@ -75,17 +98,24 @@ def base_algorithm(obj):
 
         # Find the pareto front of the population
         pareto_front = obj.find_non_dominant()
-        
+
         # Gather all the fitnesses in one list and store the values
         pvalues = np.array([i.fitness.values for i in pareto_front])
         pareto_front = [pareto_front[i] for i in np.argsort(pvalues[:, 0])]
         obj.pareto_fronts[g] = np.array([i.fitness.values for i in pareto_front])
 
-        print("Generation %d || Length of Pareto: %d ||  Mean Return is %f || Mean Variance is %f" % (g + 1, len(pareto_front), pvalues[:, 0].mean(), pvalues[:, 1].mean()))
+        generation_info = f"Generation {g + 1} || Length of Pareto: {len(pareto_front)}"
+        mean_info = f"Mean Return is {pvalues[:, 0].mean()} || Mean Variance is {pvalues[:, 1].mean()}"
+        print(f"{generation_info} || {mean_info}")
+
         print(time.perf_counter() - start)
 
 
-    print(len(pareto_front[0].cache), obj.pop_size, (time.perf_counter() - start_algo) / obj.generations)
+    print(
+        len(pareto_front[0].cache),
+        obj.pop_size,
+        (time.perf_counter() - start_algo) / obj.generations
+        )
+
     # Store the final pareto front
     obj.pareto_front = pareto_front
-
