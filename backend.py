@@ -1,13 +1,16 @@
+# pylint: skip-file
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 import os
-import config as c
-import index
+import inspect
+import importlib
+
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import re
 import matplotlib.pyplot as plt
-import numpy as np
+# import numpy as np
 
 import mate as m
 import mutate as mut
@@ -16,19 +19,21 @@ import select_ as s
 import algorithm as a
 
 # pyuic5 -x test.ui -o tes.py
-import inspect
-import importlib
-from portfolio import Portfolio
-from deap import base
-from deap import creator
-from deap import tools
+# from portfolio import Portfolio
 
-from asset_selection import Asset_Selection
-from portfolio_optimization import Portfolio_Optimization
+from asset_selection import AssetSelection
+from portfolio_optimization import PortfolioOptimization
 
-from main_tab import Ui_MainWindow
+# from main_tab import Ui_MainWindow
 from tab_as import Ui_AS
 from tab_po import Ui_PO
+
+import config as c
+import index
+# from deap import base
+# from deap import creator
+# from deap import tools
+
 
 
 class Backend():
@@ -426,7 +431,7 @@ class Backend():
             self.update_status()
         else:
             # TODO: POPUP
-            print('There is no Stock Selection object')
+            print('There is no Asset Selection object')
 
     def import_object(self):
 
@@ -647,15 +652,17 @@ class Backend():
 
 class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
+
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
         Backend.__init__(self)
         Ui_AS.__init__(self)
         self.setupUi(self)
 
+
     def setup_backend(self):
 
-        self.obj_class = Asset_Selection
+        self.obj_class = AssetSelection
         self.setup_create_object()
         self.setup_run_algorithm()
         self.setup_choose_individual()
@@ -673,8 +680,10 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
                 self.status = 2
                 if hasattr(self.obj, 'final_prtf'):
                     self.status = 3
-        else: 
+        else:
             self.status = 0
+        
+        print(previous_state, self.status)
         #         else:
         #             self.text_for_plot('Choose a Plot')
         #     else:
@@ -693,6 +702,7 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
         return
     
+
     def update_plot_text(self):
 
         if self.status == 0:
@@ -701,7 +711,7 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
                 self.text_for_plot("Run Algorithm")
                 if self.status == 2:
                     self.text_for_plot('Choose a Plot')
-    
+
 
     def connect_algo_buttons(self):
 
@@ -715,7 +725,7 @@ class Backend_PO(Backend, Ui_PO):
 
     def setup_backend(self):
 
-        self.obj_class = Portfolio_Optimization
+        self.obj_class = PortfolioOptimization
         self.setup_create_object()
         self.setup_run_algorithm()
         self.setup_choose_individual()
@@ -756,7 +766,7 @@ class Backend_PO(Backend, Ui_PO):
     def update_plot_text(self):
 
         if self.status == 0:
-            self.text_for_plot("Create an Asset Selection\n Object")
+            self.text_for_plot("Create a Portfolio Optimization\n Object")
             if self.status == 1:
                 self.text_for_plot("Run Algorithm")
                 if self.status == 2:
