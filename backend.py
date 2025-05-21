@@ -4,6 +4,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import os
 import inspect
 import importlib
+import pickle
 
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -81,9 +82,9 @@ class Backend():
                 self.labelFinalPrtf.setText("Final Portfolio: " + str(self.obj.final_prtf.asset_list))
                 self.update_status()
             else:
-                print('Please select a valid Portfolio.')
+                self.show_popup('warning', 'Please select a valid Portfolio.')
         else:
-            print('Please remove the Portfolio first.')
+            self.show_popup('warning', 'Cannot choose final Portfolio. Please remove the selected one first.')
 
     def remove_final_prtf(self):
 
@@ -92,13 +93,15 @@ class Backend():
             self.labelFinalPrtf.setText("Please select a Portfolio")
             self.update_status()
         else:
-            print('Please select a Portfolio first.')
+            self.show_popup('warning', 'Cannot remove final Portfolio. Please Select one first.')
+
 
     def buttons_final_prtf(self):
 
         self.buttonChoosePortfolio.clicked.connect(self.choose_final_prtf)
         self.buttonRemovePortfolio.clicked.connect(self.remove_final_prtf)
         self.labelFinalPrtf.setWordWrap(True)
+
 
     def radio_buttons(self): 
 
@@ -175,7 +178,7 @@ class Backend():
         algo_list = self.get_methods('algorithm.py')
         [self.comboBoxAlgo.addItem(i) for i in algo_list]
 
-    def b_end_register_methods(self):
+    def backend_register_methods(self):
 
         if self.status == 1:
             self.obj.select = getattr(s, self.comboBoxSelect.currentText())
@@ -188,11 +191,13 @@ class Backend():
 
             self.obj.run_algorithm = getattr(a, self.comboBoxAlgo.currentText())
 
-    def b_end_run_algo(self):
+
+    def backend_run_algo(self):
 
         if self.status == 1:
             if hasattr(self.obj, 'select'):
                 self.obj.run_algorithm(self.obj)
+                self.update_status()
 
     def connect_object_buttons(self):
         self.buttonCreateObject.clicked.connect(self.create_object)
@@ -285,15 +290,15 @@ class Backend():
 
         for ind in self.obj.pareto_front:
 
-            df_to_plot = ind.get_prtf_return_df()
+            df_to_plot = ind.get_portfolio_returns_df()
             ax.plot(df_to_plot.index, df_to_plot.values, alpha = alpha)
 
         if selected_ind:
-            df_to_plot = selected_ind.get_prtf_return_df()
+            df_to_plot = selected_ind.get_portfolio_returns_df()
             ax.plot(df_to_plot.index, df_to_plot.values, color = 'black', linewidth=2.0, label = 'Selected Portfolio')
 
         if final_prtf:
-            df_to_plot = final_prtf.get_prtf_return_df()
+            df_to_plot = final_prtf.get_portfolio_returns_df()
             ax.plot(df_to_plot.index, df_to_plot.values, color = '#ff0000', linewidth=2.0, label = 'Final Portfolio')
            
         ax.set_xlabel('X Axis Label')
@@ -366,7 +371,7 @@ class Backend():
 
     def get_selected_prtf(self):
         combo_idx = self.comboBoxListAssets.currentIndex() - 1
-        print(len(self.prtfs_on_display), combo_idx)
+        # print(len(self.prtfs_on_display), combo_idx)
         if combo_idx >= 0:         
             return self.prtfs_on_display[combo_idx]
         return False
@@ -409,7 +414,7 @@ class Backend():
 
         if self.status > 0:
 
-            print('Please delete the previous object first.')
+            self.show_popup('warning', 'Cannot create a new object. Please delete the previous one first.')
         
         else:
 
@@ -417,9 +422,16 @@ class Backend():
             indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations, bb_filepath = self.get_selected_inputs()
 
             if self.bb_mode:
-                self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, bb_path = bb_filepath)
+                try:
+                    self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, bb_path = bb_filepath)
+                except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError, ImportError) as e:
+                    self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
+
             else:
-                self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations)
+                try:
+                    self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations)
+                except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError) as e:
+                    self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
 
             self.update_status()
             self.buttonCreateObject.setEnabled(True)  # Re-enable the button
@@ -430,15 +442,14 @@ class Backend():
             delattr(self, 'obj')
             self.update_status()
         else:
-            # TODO: POPUP
-            print('There is no Asset Selection object')
+            self.show_popup('warning', f'There is no {self.module} object')
 
     def import_object(self):
 
         if self.status >= 1:
 
-            print('Please delete the previous  object first.')
-        
+            self.show_popup('warning', 'Cannot import a new object. Please delete the previous one first.')
+
         else:
 
             current_dir = os.getcwd()
@@ -473,10 +484,12 @@ class Backend():
 
     def save_object(self):
 
-        self.obj.save_to_pickle()
+        if self.status > 0:
+            self.obj.save_to_pickle()
+
         return
 
-    def populate_ss_layout(self):
+    def populate_asset_selection_details(self):
         
         if self.status > 0:
 
@@ -490,7 +503,7 @@ class Backend():
             self.labelStartDateInfo.setText("Start Date: " + self.obj.start_date)
             self.labelEndDateInfo.setText("End Date: " + self.obj.end_date)
             if self.bb_mode:
-                self.labelBBPath.setText("Black-box Filepath: " + str(self.obj.bb_path))
+                self.labelBBPathInfo.setText("Black-box Filepath: " + str(self.obj.bb_path))
             else:
                 self.labelCXInfo.setText("Crossover Probability: " + str(self.obj.CXPB))
                 self.labelMUTInfo.setText("Mutation Probability: " + str(self.obj.MUTPB))
@@ -631,6 +644,7 @@ class Backend():
         """
         msg = QtWidgets.QMessageBox()
         msg.setText(message)
+        msg.setTextFormat(QtCore.Qt.PlainText)
         
         if message_type == 'info':
             msg.setIcon(QtWidgets.QMessageBox.Information)
@@ -652,6 +666,7 @@ class Backend():
 
 class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
+    module = 'Asset Selection'
 
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
@@ -673,54 +688,66 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
     def update_status(self):
 
+        #Stores previous state
         previous_state = self.status
+
+        #If the object exists, status is 1
         if hasattr(self, 'obj'):
             self.status = 1
+            #If an algorithm was ran, status is 2
             if hasattr(self.obj, 'pareto_front'):
                 self.status = 2
+                #If a final portfolio was chosen, status is 3
                 if hasattr(self.obj, 'final_prtf'):
                     self.status = 3
+        #If none of the above, status is 0
         else:
             self.status = 0
-        
-        print(previous_state, self.status)
-        #         else:
-        #             self.text_for_plot('Choose a Plot')
-        #     else:
-        #         self.text_for_plot("Run Algorithm")
-        # else:
-        #     self.text_for_plot("Create an Asset Selection\n Object")
 
+        #Unless the object had a final portfolio which was removed
+        #Update text on the Choose Individual plot
         if not (previous_state == 3 and self.status == 2):
-            self.update_plot_text()
+            self.update_choose_individual_plot_text()
 
+        #Unless the object had a final portfolio which was removed
+        #Or we selected a final portfolio
+        #Update the list of portfolios on display
         if not ((previous_state == 3 and self.status == 2) or (previous_state == 2 and self.status == 3)):
             self.update_checkbox_prtfs() 
 
-        self.populate_ss_layout()
+        #Populate details of Asset Selection object
+        self.populate_asset_selection_details()
+
         self.disable_ea_algo_tab()
+
+        # print(self.status)
 
         return
     
 
-    def update_plot_text(self):
+    def update_choose_individual_plot_text(self):
 
+        #If the object does not exist, show the text to create an object
         if self.status == 0:
-            self.text_for_plot("Create an Asset Selection\n Object")
-            if self.status == 1:
-                self.text_for_plot("Run Algorithm")
-                if self.status == 2:
-                    self.text_for_plot('Choose a Plot')
+            self.text_for_plot("To Proceed:\nCreate an Asset Selection Object")
+        #If the object exists, show the text to run the algorithm
+        elif self.status == 1:
+            self.text_for_plot("To Proceed:\nRun Algorithm")
+        #If the algorithm was run, show the text to choose a plot
+        elif self.status == 2:
+            self.text_for_plot('To Proceed:\nChoose a Plot')
 
 
     def connect_algo_buttons(self):
 
         self.buttonInitPop.clicked.connect(self.b_end_init_pop)
-        self.buttonRegisterMethods.clicked.connect(self.b_end_register_methods)
-        self.buttonRunAlgo.clicked.connect(self.b_end_run_algo)
+        self.buttonRegisterMethods.clicked.connect(self.backend_register_methods)
+        self.buttonRunAlgo.clicked.connect(self.backend_run_algo)
 
 
 class Backend_PO(Backend, Ui_PO):
+
+    module = 'Portfolio Optimization'
 
 
     def setup_backend(self):
@@ -753,17 +780,17 @@ class Backend_PO(Backend, Ui_PO):
         #     self.text_for_plot("Create an Asset Selection\n Object")
 
         if not (previous_state == 3 and self.status == 2):
-            self.update_plot_text()
+            self.update_choose_individual_plot_text()
 
         if not ((previous_state == 3 and self.status == 2) or (previous_state == 2 and self.status == 3)):
             self.update_checkbox_prtfs() 
 
-        self.populate_ss_layout()
+        self.populate_asset_selection_details()
         self.disable_ea_algo_tab()
 
         return
     
-    def update_plot_text(self):
+    def update_choose_individual_plot_text(self):
 
         if self.status == 0:
             self.text_for_plot("Create a Portfolio Optimization\n Object")
@@ -776,12 +803,12 @@ class Backend_PO(Backend, Ui_PO):
     def connect_algo_buttons(self):
 
         self.buttonInitPop.clicked.connect(self.b_end_init_pop)
-        self.buttonRegisterMethods.clicked.connect(self.b_end_register_methods)
-        self.buttonRunAlgo.clicked.connect(self.b_end_run_algo)
-        self.buttonImportAssetsPRTF.clicked.connect(lambda: self.b_end_import_assets('pkl'))
-        self.buttonImportAssetsJSON.clicked.connect(lambda: self.b_end_import_assets('json'))
+        self.buttonRegisterMethods.clicked.connect(self.backend_register_methods)
+        self.buttonRunAlgo.clicked.connect(self.backend_run_algo)
+        self.buttonImportAssetsPRTF.clicked.connect(lambda: self.backend_import_assets('pkl'))
+        self.buttonImportAssetsJSON.clicked.connect(lambda: self.backend_import_assets('json'))
 
-    def b_end_import_assets(self, ftype):
+    def backend_import_assets(self, ftype):
 
         if self.status == 1:
 

@@ -59,15 +59,17 @@ class AssetSelection(Module):
         #Use Asset Selection folder for object
         self.folder = c.as_folder
 
+        #If a filename is provided, extract the attributes from the pickle file
+        if filename is not None:
+            self.init_from_file(filename)
+            return
+
         #If an initialization dictionary is provided, extract the attributes from it
         if init_dict is not None:
             (indexes, prtf_size, objectives, start_date, end_date,
              bb_path, CXPB, MUTPB, pop_size, generations, _
              ) = self.get_init_data_from_dict(init_dict)
-        #If a filename is provided, extract the attributes from the pickle file
-        elif filename is not None:
-            self.init_from_file(filename)
-            return
+
         #If no filename or dictionary is provided, initialize the attributes from the arguments
         self.init_attributes(indexes, prtf_size, objectives, start_date, end_date,
                              bb_path, CXPB, MUTPB, pop_size, generations, filename)

@@ -21,6 +21,7 @@ import data_op as op
 import config as c
 from portfolio import Portfolio
 from constraints import Constraint
+from index import Index
 
 
 class Module:
@@ -489,10 +490,12 @@ class Module:
          ) = self.get_init_data_from_dict(pickle_data['init_data'])
 
         #Store initialization attributes on self object
-        self.init_attributes(indexes, prtf_size, objectives, start_date, end_date, 
+        self.init_attributes(indexes, prtf_size, objectives, start_date, end_date,
                              bb_path, CXPB, MUTPB, pop_size, generations, filename)
+
         #Store evolutionary operators on self object
         self.ea_ops_from_dict(pickle_data)
+
         #Store additional attributes on self object
         self.get_attributes_from_dict(self.attributes_list, pickle_data)
 
@@ -543,7 +546,7 @@ class Module:
         else:
             MUTPB = None
 
-        return (indexes, prtf_size, objectives, start_date, end_date, 
+        return (indexes, prtf_size, objectives, start_date, end_date,
                 bb_path, CXPB, MUTPB, pop_size, generations, filename)
 
 
@@ -593,6 +596,10 @@ class Module:
             None: The method stores the object's attributes in place.
         """
 
+        self.validate_attributes(indexes, prtf_size, objectives,
+                                 start_date, end_date,
+                                 CXPB, MUTPB, generations, bb_path)
+
         #Sets the attributes to the self object
         self.filename = filename
         self.indexes = indexes
@@ -608,6 +615,78 @@ class Module:
         self.bb_path = bb_path
         if bb_path is not None:
             self.import_blackbox_module(bb_path)
+
+
+    def validate_attributes(self, indexes, prtf_size, objectives, start_date, end_date, 
+                            CXPB, MUTPB, generations, bb_path):
+        """
+        Validates the initialization attributes.
+
+        Can be turned off using config file - validate_attributes
+
+        Args:
+            indexes (list): List of indexes.
+            prtf_size (int): Portfolio size.
+            objectives (tuple): Objectives for optimization.
+            start_date (str): Start date.
+            end_date (str): End date.
+            CXPB (float): Crossover probability.
+            MUTPB (float): Mutation probability.
+            generations (int): Number of generations.
+
+        Raises:
+            TypeError: If any attribute is of the wrong type.
+            ValueError: If any attribute has an invalid value.
+        """
+
+        if not c.validate_attributes:
+            return
+
+        # Check if indexes is a list
+        if not isinstance(indexes, list):
+            raise TypeError(f"'indexes' must be a list, got {type(indexes).__name__}.")
+        # Check if indexes is a non-empty
+        if not indexes:
+            raise TypeError(f"'indexes' must be a non-empty list, got {indexes}.")
+        # Check if all elements in the list are instances of the Index class
+        if not all(isinstance(index, Index) for index in indexes):
+            raise TypeError("All elements in 'indexes' must be instances of the 'Index' class.")
+
+        # Check if prtf_size is an integer greater than 1
+        if not isinstance(prtf_size, int) or prtf_size <= 1:
+            raise ValueError(f"'prtf_size' must be an integer greater than 1, got {prtf_size}.")
+
+        # Check if objectives is a tuple
+        if not isinstance(objectives, tuple):
+            raise TypeError(f"'objectives' must be a tuple, got {type(objectives).__name__}.")
+
+        # Check if start_date is a valid date
+        if not isinstance(start_date, (str)):
+            raise TypeError(f"'start_date' must be a valid date string, got {type(start_date).__name__}.")
+
+        # Check if end_date is a valid date and after start_date
+        if not isinstance(end_date, (str)):
+            raise TypeError(f"'end_date' must be a valid date string, got {type(end_date).__name__}.")
+        if end_date <= start_date:
+            raise ValueError(f"'end_date' must be after 'start_date'. Got start_date={start_date} and end_date={end_date}.")
+
+        # Check if bb_path is a string or None
+        if isinstance(bb_path, (str)):
+            return
+        if bb_path is not None:
+            raise TypeError(f"'bb_path' must be a string or None, got {type(bb_path).__name__}.")
+
+        # Check if CXPB is a float between 0 and 1
+        if not isinstance(CXPB, float) or not 0 <= CXPB <= 1:
+            raise ValueError(f"'CXPB' must be a float between 0 and 1, got {CXPB}.")
+
+        # Check if MUTPB is a float between 0 and 1
+        if not isinstance(MUTPB, float) or not 0 <= MUTPB <= 1:
+            raise ValueError(f"'MUTPB' must be a float between 0 and 1, got {MUTPB}.")
+
+        # Check if generations is an integer greater than 1
+        if not isinstance(generations, int) or generations <= 1:
+            raise ValueError(f"'generations' must be an integer greater than 1, got {generations}.")
 
 
     def get_attributes_from_dict(self, attributes, pickle_data):
@@ -684,15 +763,27 @@ class Module:
 
 
     def import_blackbox_module(self, module_path):
+        """
+        Imports a blackbox module from the specified file path.
 
-        if module_path == "":
-            return -1
+        Args:
+            module_path (str): The path to the blackbox module file.
+
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+            ImportError: If there is an error importing the module.
+        """
+
+        # Check if the file exists
+        if not os.path.exists(module_path):
+            raise FileNotFoundError(f"The specified blackbox file does not exist: {module_path}")
+
         spec = importlib.util.spec_from_file_location("blackbox_module", module_path)
         self.bb = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(self.bb)
-        except FileNotFoundError as e:
-            print(f"Error: {e}")
+        except Exception as e:
+            raise ImportError(f"An error occurred while importing the blackbox module: {e}") from e
 
 
     def set_bb_algorithm(self):
@@ -1055,7 +1146,7 @@ class Module:
     #         prtf = Portfolio(list(old_prtf.indexes.values()), cardinality_constraint=old_prtf.cardinality_constraint, start_date = start_date, end_date = end_date)
     #         prtf.prtf_dict = old_prtf.asset_list
     #         prtf.asset_weights = old_prtf.asset_weights
-    #         df_to_plot = prtf.get_prtf_return_df()
+    #         df_to_plot = prtf.get_portfolio_returns_df()
     #         if first_label:
     #             plt.plot(df_to_plot.index, df_to_plot.values, label = 'Portfolios', color = '#007be0', alpha = 0.8)
     #             first_label = False
@@ -1063,7 +1154,7 @@ class Module:
     #             plt.plot(df_to_plot.index, df_to_plot.values, color = '#007be0', alpha = 0.65)
 
     #     index_prtf = old_prtf.get_index_portfolio(list(self.indexes.values()), start_date = start_date, end_date = end_date)
-    #     df_to_plot = index_prtf.get_prtf_return_df()
+    #     df_to_plot = index_prtf.get_portfolio_returns_df()
     #     plt.plot(df_to_plot.index, df_to_plot.values, label = 'Index', color = 'red')
 
 

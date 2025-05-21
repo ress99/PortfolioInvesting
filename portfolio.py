@@ -5,10 +5,8 @@ import json
 import os
 import logging
 from cachetools import LRUCache
-
 import numpy as np
-# import pandas as pd
-# import time
+
 import config as c
 from fitness import Fitness
 import data_op as op
@@ -548,17 +546,20 @@ class Portfolio:
         out_asset, in_asset = out_asset.upper(), in_asset.upper()
 
         if out_asset not in self.asset_list:
-            logger.warning('Asset %s does not exist in the Portfolio.', out_asset)
+            logger.info('Asset %s does not exist in the Portfolio.', out_asset)
         elif in_asset in self.asset_list:
-            logger.warning('Asset %s already exists in the Portfolio.', in_asset)
+            logger.info('Asset %s already exists in the Portfolio.', in_asset)
         elif in_asset not in self.all_assets:
-            logger.warning('Asset %s does not exist.', in_asset)
+            logger.info('Asset %s does not exist.', in_asset)
 
         else:
             weight = self.prtf_dict[out_asset]['weight']
             self.prtf_dict = [out_asset, in_asset]
             self.change_asset_weight(in_asset, weight)
             logger.info('Substituted %s for %s in the portfolio.', out_asset, in_asset)
+            return True
+
+        return False
 
 
     def apply_penalty(self):
