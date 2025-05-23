@@ -304,7 +304,7 @@ class Module:
         return self.remove_invalids(pop)
 
 
-    def read_pickle(self, filename, folder):
+    def get_object_from_pickle(self, filename, folder):
         """Reads pickle and extracts its data"""
 
         # Check if the folder is valid
@@ -319,21 +319,21 @@ class Module:
         return self.get_data_from_pickle(pickle_data)
 
 
-    #To be implemented in subclass
-    def get_data_from_pickle(self, pickle_data):
-        """Non-implemented method"""
-        raise NotImplementedError("Subclasses must implement `clone`.")
-
-
     def get_pickle_raw_data(self, filename, folder = None):
         """Opens pickle file and returns the raw data"""
 
-        filename_pkl = filename + '.pkl'
-        folder_names = [c.prtf_folder, folder, filename_pkl]
+        # filename = filename + '.pkl'
+        folder_names = [c.prtf_folder, folder, filename]
         with open(os.path.join(*folder_names), 'rb') as file:
             pickle_data = pickle.load(file)
 
         return pickle_data
+
+
+    #To be implemented in subclass
+    def get_data_from_pickle(self, pickle_data):
+        """Non-implemented method"""
+        raise NotImplementedError("Subclasses must implement `get_data_from_pickle`.")
 
 
     def save_to_pickle(self, filename = None):
@@ -356,19 +356,9 @@ class Module:
         data_to_pickle = self.get_data_to_pickle()
 
         #Saves the data to a pickle file
-        self.save_pkl(data_to_pickle, pkl_filename)
+        pkl_filename = self.dump_pkl(data_to_pickle, pkl_filename)
 
-        return
-
-
-    def save_pkl(self, data_to_pickle, pkl_filename):
-        """Saves data to a pickle file"""
-
-        pkl_folder_names = [c.prtf_folder, self.folder, pkl_filename]
-        with open(os.path.join(*pkl_folder_names), 'wb') as file:
-            pickle.dump(data_to_pickle, file)
-
-        return
+        return pkl_filename
 
 
     def get_data_to_pickle(self):
@@ -396,6 +386,38 @@ class Module:
         data_to_pickle = self.add_obj_attributes_to_dict(self.attributes_list, data_to_pickle)
 
         return data_to_pickle
+
+
+    # def dump_pkl(self, data_to_pickle, pkl_filename):
+    #     """Saves data to a pickle file"""
+
+    #     pkl_folder_names = [c.prtf_folder, self.folder, pkl_filename]
+    #     with open(os.path.join(*pkl_folder_names), 'wb') as file:
+    #         pickle.dump(data_to_pickle, file)
+
+    #     return
+
+
+    def dump_pkl(self, data_to_pickle, pkl_filename):
+        """Saves data to a pickle file, incrementing the filename if it already exists."""
+
+        base_folder = os.path.join(c.prtf_folder, self.folder)
+        base_name, ext = os.path.splitext(pkl_filename)
+        full_path = os.path.join(base_folder, pkl_filename)
+
+        count = 0
+        while os.path.exists(full_path):
+            count += 1
+            pkl_filename = f"{base_name}({count}){ext}"
+            full_path = os.path.join(base_folder, pkl_filename)
+
+        # Ensure the directory exists
+        # os.makedirs(base_folder, exist_ok=True)
+
+        with open(full_path, 'wb') as file:
+            pickle.dump(data_to_pickle, file)
+
+        return pkl_filename
 
 
     def init_data_to_dict(self):
