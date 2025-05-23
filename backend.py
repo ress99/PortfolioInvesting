@@ -156,10 +156,11 @@ class Backend():
         self.comboBoxChoosePlot.addItem("All Portfolio Returns")
         self.comboBoxChoosePlot.addItem("Chosen Portfolio Assets")
 
-    def b_end_init_pop(self):
+    def backend_init_pop(self):
 
         if self.status == 1:
             self.obj.init_population()
+            self.show_popup('info', 'Population Initialized')
 
     def add_func_names(self):
 
@@ -191,12 +192,15 @@ class Backend():
 
             self.obj.run_algorithm = getattr(a, self.comboBoxAlgo.currentText())
 
+            self.show_popup('info', 'Evolutionary Operators Registered')
+
 
     def backend_run_algo(self):
 
         if self.status == 1:
             if hasattr(self.obj, 'select'):
                 self.obj.run_algorithm(self.obj)
+                self.show_popup('info', 'Algorithm Finished')
                 self.update_status()
 
     def connect_object_buttons(self):
@@ -300,12 +304,13 @@ class Backend():
         if final_prtf:
             df_to_plot = final_prtf.get_portfolio_returns_df()
             ax.plot(df_to_plot.index, df_to_plot.values, color = '#ff0000', linewidth=2.0, label = 'Final Portfolio')
-           
+
         ax.set_xlabel('X Axis Label')
         ax.set_ylabel('Y Axis Label')
         ax.set_title('Sine Wave Plot')
-        ax.legend()
         ax.grid(True)
+        if selected_ind or final_prtf:
+            ax.legend()
 
         return   
 
@@ -347,6 +352,8 @@ class Backend():
         arr_list = self.obj.remove_bounds(self.checkBoxBoundaries.isChecked(), min_values, max_values)
 
         for idx, arr in enumerate(arr_list):
+            if len(arr) == 0:
+                continue
             if idx == len(arr_list) - 1:
                 ax.plot(arr[:, 0], arr[:, 1], color = 'blue', marker = 'o', label = 'Pareto Front')
             else:
@@ -371,7 +378,6 @@ class Backend():
 
     def get_selected_prtf(self):
         combo_idx = self.comboBoxListAssets.currentIndex() - 1
-        # print(len(self.prtfs_on_display), combo_idx)
         if combo_idx >= 0:         
             return self.prtfs_on_display[combo_idx]
         return False
@@ -424,12 +430,14 @@ class Backend():
             if self.bb_mode:
                 try:
                     self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, bb_path = bb_filepath)
+                    self.show_popup('info', 'Asset Selection created.')
                 except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError, ImportError) as e:
                     self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
 
             else:
                 try:
                     self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations)
+                    self.show_popup('info', 'Asset Selection created.')
                 except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError) as e:
                     self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
 
@@ -440,6 +448,7 @@ class Backend():
 
         if self.status >= 1:
             delattr(self, 'obj')
+            self.show_popup('info', 'Object deleted')
             self.update_status()
         else:
             self.show_popup('warning', f'There is no {self.module} object')
@@ -464,7 +473,7 @@ class Backend():
             filename, _ = self.open_file_dialog(dir, "Pickle Files (*.pkl)")
 
             if filename is None:
-                self.show_popup('question', 'Ora boa Tarde')
+                self.show_popup('warning', 'Please select a valid File')
                 return
             
             self.obj = self.obj_class(filename = filename)
@@ -482,11 +491,17 @@ class Backend():
         else:
             return None, None
 
+
+
     def save_object(self):
 
         if self.status > 0:
-            self.obj.save_to_pickle()
+            filename = self.show_input_popup("File name", "Please enter a name for the file:")
+            saved_filename = self.obj.save_to_pickle(filename)
+            self.show_popup('info', f'Object saved as {saved_filename}')
 
+        else:
+            self.show_popup('warning', 'Cannot save an object. Please create one first.')
         return
 
     def populate_asset_selection_details(self):
@@ -664,6 +679,22 @@ class Backend():
 
         msg.exec_()
 
+
+    # def show_input_popup(self, title= "", label= ""):
+    #     text, ok = QtWidgets.QInputDialog.getText(None, title, label)
+    #     if ok:
+    #         return text
+    #     return None
+
+    def show_input_popup(self, title="", label=""):
+        text, ok = QtWidgets.QInputDialog.getText(None, title, label)
+        if ok:
+            filename = str(text).strip()
+            # Check for invalid filename characters (Windows: \ / : * ? " < > |)
+            if filename and not any(c in filename for c in r'\/:*?"<>|'):
+                return filename
+        return None
+
 class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
     module = 'Asset Selection'
@@ -720,8 +751,6 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
         self.disable_ea_algo_tab()
 
-        # print(self.status)
-
         return
     
 
@@ -740,7 +769,7 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
     def connect_algo_buttons(self):
 
-        self.buttonInitPop.clicked.connect(self.b_end_init_pop)
+        self.buttonInitPop.clicked.connect(self.backend_init_pop)
         self.buttonRegisterMethods.clicked.connect(self.backend_register_methods)
         self.buttonRunAlgo.clicked.connect(self.backend_run_algo)
 
@@ -802,7 +831,7 @@ class Backend_PO(Backend, Ui_PO):
 
     def connect_algo_buttons(self):
 
-        self.buttonInitPop.clicked.connect(self.b_end_init_pop)
+        self.buttonInitPop.clicked.connect(self.backend_init_pop)
         self.buttonRegisterMethods.clicked.connect(self.backend_register_methods)
         self.buttonRunAlgo.clicked.connect(self.backend_run_algo)
         self.buttonImportAssetsPRTF.clicked.connect(lambda: self.backend_import_assets('pkl'))
