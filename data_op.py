@@ -122,7 +122,7 @@ def merge_asset_dataframes(assets, column = 'Close', how_merge = 'outer'):
     """
 
     #Merge options
-    how_merge_list = ['inner', 'outer']                         
+    how_merge_list = ['inner', 'outer']
 
     #Column check
     if column not in quote_columns:
@@ -197,12 +197,16 @@ def total_size(obj, seen=None):
 
 
 def aux_get_swap_numbers(lenght):
-    """Auxilliary method to Swap numbers in a list with """
+    """Auxilliary method that returns two indexes to swap in a list"""
 
-    nmbr1 = random.randint(0, lenght)
-    nmbr2 = random.randint(0, lenght)
+    #Retrieves two random indexes from 0 to lenght
+    idx1 = random.randint(0, lenght)
+    idx2 = random.randint(0, lenght)
 
-    if nmbr1 >= nmbr2:
-        nmbr1, nmbr2 = aux_get_swap_numbers(lenght)
+    #If the first index is not smaller than the first
+    if idx1 >= idx2:
+        #Recall the function until the condition is met
+        idx1, idx2 = aux_get_swap_numbers(lenght)
 
-    return nmbr1, nmbr2
+    #Return the two indexes
+    return idx1, idx2
