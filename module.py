@@ -519,7 +519,7 @@ class Module:
         self.ea_ops_from_dict(pickle_data)
 
         #Store additional attributes on self object
-        self.get_attributes_from_dict(self.attributes_list, pickle_data)
+        self.set_attributes_from_pickle_dict(self.attributes_list, pickle_data)
 
         return
 
@@ -711,7 +711,7 @@ class Module:
             raise ValueError(f"'generations' must be an integer greater than 1, got {generations}.")
 
 
-    def get_attributes_from_dict(self, attributes, pickle_data):
+    def set_attributes_from_pickle_dict(self, attributes, pickle_data):
         """
         Sets the object's attributes based on a dictionary.
 
