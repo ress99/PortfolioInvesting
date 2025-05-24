@@ -3,6 +3,8 @@
 
 import config as c
 from module import Module
+import data_op as op
+from portfolio_optimization import PortfolioOptimization
 
 # import logging
 # import time
@@ -47,7 +49,7 @@ class AssetSelection(Module):
         This constructor initializes the object using one of three methods:
         1. If a filename is provided, the attributes are loaded from a pickle file.
         2. If init_dict is provided, the attributes are extracted from it.
-        3. If no filename or dictionary is provided, the attributes are initialized from the arguments.
+        3. If no filename or dictionary is provided, the class attributes are used
 
         Args:
             Initialization attributes.
@@ -119,28 +121,78 @@ class AssetSelection(Module):
         return self.init_portfolio_individual(assets = assets)
 
 
-    # def init_from_file(self, filename):
+    def create_portfolio_optimization(self):
+        """
+        Creates a new PortfolioOptimization object using initialization data from the self object.
 
-    #     pickle_data = self.get_pickle_raw_data(filename, self.folder)
+        This method extracts the initialization data from the current AssetSelection instance
+        Uses it to create and return a new PO object with the same configuration.
 
-    #     (indexes, prtf_size, objectives, start_date, end_date,
-    #      bb_path, CXPB, MUTPB, pop_size, generations, _) = self.get_init_data_from_dict(pickle_data)
+        Returns:
+            PortfolioOptimization: A new PO object initialized with the current object's data.
+        """
+        #Extract initialization data from self object
+        init_data = self.init_data
 
-    #     self.init_attributes(indexes, prtf_size, objectives, start_date, end_date,
-    #                          bb_path, CXPB, MUTPB, pop_size, generations, filename)
+        #Create a new PortfolioOptimization object with initialization data
+        new_po = PortfolioOptimization(init_dict = init_data)
 
-    #     self.ea_ops_from_dict(pickle_data)
-    #     self.set_attributes_from_pickle_dict(self.attributes_list, pickle_data)
-
-    #     return
+        #Return the new PortfolioOptimization object
+        return new_po
 
 
-    # def get_data_to_pickle(self):
+    def create_test_asset_selection(self, years = None, months = None, days = None):
+        """
+        Creates a new AssetSelection object for testing with a shifted time period.
 
-    #     init_data = self.init_data_to_dict()
-    #     ea_ops = self.ea_ops_to_dict()
+        This method generates a new AssetSelection instance using the initialization data
+        from the current object, but with the start and end dates shifted forward by the
+        specified number of years, months, and days. The new object will have a population
+        initialized with the same assets and weights as the original. If the original object
+        has a Pareto front or a final portfolio, these are also copied to the new object.
 
-    #     data_to_pickle = {"init_data": init_data, 'ea_ops': ea_ops}
-    #     data_to_pickle = self.add_obj_attributes_to_dict(self.attributes_list, data_to_pickle)
+        Args:
+            years (int, optional): Number of years as a test period
+            months (int, optional): Number of months as a test period
+            days (int, optional): Number of days as a test period
 
-    #     return data_to_pickle
+        Returns:
+            AssetSelection: A new AssetSelection object with updated dates
+            and copied population, pareto front, and final portfolio if present.
+        """
+        #If no time period is specified, default to 1 year
+        if years is None and months is None and days is None:
+            years = 1
+
+        #Extract initialization data from the original AssetSelection object
+        init_data = self.init_data
+
+        #Update start and end dates for the new AssetSelection object
+        init_data['start_date'] = init_data['end_date']
+        init_data['end_date'] = op.add_years_months_days(init_data['end_date'], years, months, days)
+
+        #Create a new AssetSelection object with the updated initialization data
+        new_as_sel = AssetSelection(init_dict = init_data)
+
+        #Initialize new population with individuals from the original population
+        #Same assets and weights; new start and end dates
+        new_as_sel.pop = [new_as_sel.init_portfolio_individual
+                    (assets = ind.asset_list, asset_weights = ind.asset_weights)
+                    for ind in self.pop]
+
+        #If the original AssetSelection object has a pareto front, copy it to the new object
+        if hasattr(self, 'pareto_front'):
+            #Get the indexes of the original pareto front individuals in the original population
+            old_pareto_indexes = [self.pop.index(ind) for ind in self.pareto_front]
+            #Get the pareto individuals according to theirindexes in the old population
+            new_as_sel.pareto_front = [new_as_sel.pop[idx] for idx in old_pareto_indexes]
+
+        #If the original AssetSelection object has a final portfolio, copy it to the new object
+        if hasattr(self, 'final_prtf'):
+            #Get the index of the original final portfolio in the original population
+            old_final_prtf_index = self.pop.index(self.final_prtf)
+            #Get the final portfolio according to its index in the old population
+            new_as_sel.final_prtf = new_as_sel.pop[old_final_prtf_index]
+
+        #Return the new AssetSelection object
+        return new_as_sel
