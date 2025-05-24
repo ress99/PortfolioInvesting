@@ -45,9 +45,9 @@ class AssetSelection(Module):
         Initializes an AssetSelection object.
 
         This constructor initializes the object using one of three methods:
-        1. If init_dict is provided, the attributes are extracted from it.
-        2. If a filename is provided, the attributes are loaded from a pickle file.
-        3. If neither is provided, the attributes are initialized using the provided arguments.
+        1. If a filename is provided, the attributes are loaded from a pickle file.
+        2. If init_dict is provided, the attributes are extracted from it.
+        3. If no filename or dictionary is provided, the attributes are initialized from the arguments.
 
         Args:
             Initialization attributes.
@@ -100,9 +100,10 @@ class AssetSelection(Module):
         #Store evolutionary operators on Asset Selection object
         as_sel.ea_ops_from_dict(pickle_data)
         #Store additional attributes on self object
-        as_sel.get_attributes_from_dict(self.attributes_list, pickle_data)
+        as_sel.set_attributes_from_pickle_dict(self.attributes_list, pickle_data)
 
         return as_sel
+
 
     def init_population(self):
         """Initialize the population of individuals for the asset selection algorithm."""
@@ -129,7 +130,7 @@ class AssetSelection(Module):
     #                          bb_path, CXPB, MUTPB, pop_size, generations, filename)
 
     #     self.ea_ops_from_dict(pickle_data)
-    #     self.get_attributes_from_dict(self.attributes_list, pickle_data)
+    #     self.set_attributes_from_pickle_dict(self.attributes_list, pickle_data)
 
     #     return
 
