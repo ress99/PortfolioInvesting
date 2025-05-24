@@ -28,7 +28,7 @@ class Portfolio:
     def __init__(self, indexes, cardinality_constraint = None, column = 'Close',
                  start_date = None, end_date = None, merge_option = 'inner', filename = None):
 
-        logger.info('Initializing Portfolio object with %d stocks.', cardinality_constraint)
+        logger.debug('Initializing Portfolio object with %d stocks.', cardinality_constraint)
         self._prtf_dict = dict()
         self.indexes = indexes
 
@@ -114,7 +114,7 @@ class Portfolio:
             #Checks if asset is already in the portfolio  - if so removes it
             if asset in self:
                 del self._prtf_dict[asset]
-                logger.info('Asset %s removed from Portfolio', asset)
+                logger.debug('Asset %s removed from Portfolio', asset)
 
             #If not in the portfolio but exists in the indexes, adds it to the portfolio
             elif asset in self.all_assets:
@@ -122,11 +122,11 @@ class Portfolio:
                 asset_dict = dict()
                 asset_dict = {'object': index[asset], 'weight': -1}
                 self._prtf_dict[asset] = asset_dict
-                logger.info('Asset %s added to Portfolio', asset)
+                logger.debug('Asset %s added to Portfolio', asset)
 
             #If the asset does not exist, issues a warning
             else:
-                logger.warning('Asset %s does not exist in the index list', asset)
+                logger.warning('Asset %s does not exist in list of indexes', asset)
 
         return
 
@@ -193,7 +193,7 @@ class Portfolio:
         If the list has a valid size, the asset weights are changed
         """
 
-        logger.info('Getting new asset weights.')
+        logger.debug('Getting new asset weights.')
         if len(new_weights) == self.nmbr_assets:
             for idx, tic in enumerate(self.asset_list):
                 self.change_asset_weight(tic, new_weights[idx])
@@ -218,6 +218,10 @@ class Portfolio:
 
         #Return the value stored in the cache
         return Portfolio.cache[key]
+
+    def get_cache_size(self):
+        """Returns the size of the cache."""
+        return Portfolio.cache.currsize
 
 
     @property
@@ -272,7 +276,7 @@ class Portfolio:
             self._merge_option = 'inner'
         else:
             self._merge_option = merge
-            logger.info('The merge option is set to %s.', merge)
+            logger.debug('The merge option is set to %s.', merge)
 
         return
 
@@ -287,9 +291,9 @@ class Portfolio:
     def start_date(self, date):
         """Setter method for the private _start_date attribute."""
 
-        logger.info('Setting the start date')
+        logger.debug('Setting the start date')
         self._start_date = date
-        logger.info('Start date set as %s', self._start_date)
+        logger.debug('Start date set as %s', self._start_date)
 
 
     @property
@@ -302,9 +306,9 @@ class Portfolio:
     def end_date(self, date):
         """Setter method for the private _end_date attribute."""
 
-        logger.info('Setting the end date')
+        logger.debug('Setting the end date')
         self._end_date = date
-        logger.info('End date set as %s', self._end_date)
+        logger.debug('End date set as %s', self._end_date)
 
 
     @property
@@ -337,12 +341,12 @@ class Portfolio:
     def normalize_asset_weights(self):
         """Normalizes the weights of all portfolio assets."""
 
-        logger.info('Normalizing the weights of the Portfolio.')
+        logger.debug('Normalizing the weights of the Portfolio.')
         weight_sum = sum(self.asset_weights)
         logger.debug('The sum of the weights is %f', weight_sum)
         self.asset_weights = [x / weight_sum for x in self.asset_weights]
         self.asset_weights = np.asarray(self.asset_weights)
-        logger.info('Portfolio weights normalized.')
+        logger.debug('Portfolio weights normalized.')
 
         return
 
@@ -366,14 +370,14 @@ class Portfolio:
         Returns True if all are positive; False otherwise.
         """
 
-        logger.info('Checking positivity of all weights of the Portfolio.')
+        logger.debug('Checking positivity of all weights of the Portfolio.')
         for asset_name in self:
             weight = self[asset_name]['weight']
             logger.debug('Asset %s has weight %f.', asset_name, weight)
             if weight < 0:
-                logger.info('There are assets with negative weights.')
+                logger.debug('There are assets with negative weights.')
                 return False
-        logger.info('All assets have positive weight.')
+        logger.debug('All assets have positive weight.')
         return True
 
 
@@ -384,7 +388,7 @@ class Portfolio:
         If normalize is True, the asset weights are normalized in the end.
         """
 
-        logger.info('Applying positivity to the Portfolio weights.')
+        logger.debug('Applying positivity to the Portfolio weights.')
         if not self.check_positivity():
             for asset_name in self:
                 weight = self[asset_name]['weight']
@@ -473,7 +477,7 @@ class Portfolio:
             df = df.merge(data[['Date', column]], on = 'Date', how = self.merge_option)
             df.rename(columns={column: asset}, inplace = True)
 
-        logger.info('All the %d assets added to the same dataframe with %s merge.',
+        logger.debug('All the %d assets added to the same dataframe with %s merge.',
                     len(self), self.merge_option)
 
         df = op.df_start_to_end_date(df, start_date = start_date, end_date = end_date)
@@ -508,7 +512,7 @@ class Portfolio:
     def add(self, asset):
         """Add asset to the prtf_dict"""
 
-        logger.info('Adding %s to Portfolio.', asset)
+        logger.debug('Adding %s to Portfolio.', asset)
 
         if asset in self.all_assets:
             if asset not in self:
@@ -524,7 +528,7 @@ class Portfolio:
     def remove(self, asset):
         """Remove asset from the prtf_dict"""
 
-        logger.info('Removing %s from Portfolio.', asset)
+        logger.debug('Removing %s from Portfolio.', asset)
 
         if asset in self.all_assets:
             if asset in self:
@@ -546,17 +550,17 @@ class Portfolio:
         out_asset, in_asset = out_asset.upper(), in_asset.upper()
 
         if out_asset not in self.asset_list:
-            logger.info('Asset %s does not exist in the Portfolio.', out_asset)
+            logger.debug('Asset %s does not exist in the Portfolio.', out_asset)
         elif in_asset in self.asset_list:
-            logger.info('Asset %s already exists in the Portfolio.', in_asset)
+            logger.debug('Asset %s already exists in the Portfolio.', in_asset)
         elif in_asset not in self.all_assets:
-            logger.info('Asset %s does not exist.', in_asset)
+            logger.debug('Asset %s does not exist.', in_asset)
 
         else:
             weight = self.prtf_dict[out_asset]['weight']
             self.prtf_dict = [out_asset, in_asset]
             self.change_asset_weight(in_asset, weight)
-            logger.info('Substituted %s for %s in the portfolio.', out_asset, in_asset)
+            logger.debug('Substituted %s for %s in the portfolio.', out_asset, in_asset)
             return True
 
         return False
@@ -632,7 +636,7 @@ class Portfolio:
         if self.nmbr_assets > self.cardinality_constraint:
             return False
 
-        logger.info('The Portfolio checks the cardinality constraint.')
+        logger.debug('The Portfolio checks the cardinality constraint.')
         return True
 
 
@@ -642,7 +646,7 @@ class Portfolio:
         Removes the asset with the lowest weight until the constraint is met.
         """
 
-        logger.info('Applying cardinality constraint.')
+        logger.debug('Applying cardinality constraint.')
         while not self.check_cardinality():
             array_asset_weights = np.array(self.asset_weights)
             idx = np.argmin(array_asset_weights)
@@ -652,7 +656,7 @@ class Portfolio:
     def apply_same_weights(self):
         """Method that applied the same weights to all assets."""
 
-        logger.info('Applying same weights to the Portfolio.')
+        logger.debug('Applying same weights to the Portfolio.')
         new_weights = [1/self.nmbr_assets] * self.nmbr_assets
         logger.debug('The new weights are %s', str(new_weights))
         self.asset_weights = new_weights
