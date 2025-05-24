@@ -104,7 +104,7 @@ class Module:
         setattr(self, alias, partial_function)
 
 
-    def get_asset_weights(self, prtf, asset_weights, random_weights = False):
+    def set_asset_weights(self, prtf, asset_weights, random_weights = False):
         """
         Calculate asset weights for Portfolio.
         If a list is provided as input, it will be used as the asset weights.
@@ -140,15 +140,15 @@ class Module:
         indexes = None
         ):
         """
-        Initializes an individual portfolio.
+        Initializes an individual portfolio from Module class
 
         Args:
             - assets (list, optional): List of asset names to include in the portfolio.
             Defaults to None. If None, a random selection of assets will be used.
             - asset_weights (list, optional): List of weights for the assets.
-            Defaults to None. Given as input to get_asset_weights
+            Defaults to None. Given as input to set_asset_weights
             - random_weights (bool, optional): Whether to assign random weights to the assets.
-            Defaults to False. Given as input to get_asset_weights
+            Defaults to False. Given as input to set_asset_weights
             - start_date (str, optional): Start date for the portfolio. Defaults to None.
             - end_date (str, optional): End date for the portfolio. Defaults to None.
             - indexes (list, optional): List of index objects to use. Defaults to None.
@@ -183,7 +183,7 @@ class Module:
             prtf.prtf_dict = assets
 
         #Assign weights to assets
-        self.get_asset_weights(prtf, asset_weights, random_weights)
+        self.set_asset_weights(prtf, asset_weights, random_weights)
 
         return prtf
 
@@ -375,12 +375,8 @@ class Module:
                 - Additional attributes specified in `self.attributes_list`.
         """
 
-        #Extracts initial data and evolutionary operators from instance
-        init_data = self.init_data_to_dict()
-        ea_ops = self.ea_ops_to_dict()
-
-        #Converts data to a dictionary
-        data_to_pickle = {"init_data": init_data, 'ea_ops': ea_ops}
+        #Extracts data from self and stores it in a dictionary
+        data_to_pickle = {"init_data": self.init_data, 'ea_ops': self.ea_ops}
 
         #Adds additional object attributes to the dictionary
         data_to_pickle = self.add_obj_attributes_to_dict(self.attributes_list, data_to_pickle)
@@ -572,7 +568,7 @@ class Module:
                 bb_path, CXPB, MUTPB, pop_size, generations, filename)
 
 
-    def ea_ops_from_dict(self, pickle_data):
+    def ea_ops_from_dict(self, ea_dict):
         """
         Loads evolutionary operators from pickle dictionary and assigns them to self object.
 
@@ -587,10 +583,8 @@ class Module:
         """
 
         #If evolutionary operators are present in pickle, save dictionary
-        if 'ea_ops' in pickle_data:
-            ea_dict = pickle_data['ea_ops']
-        else:
-            return
+        if 'ea_ops' in ea_dict:
+            ea_dict = ea_dict['ea_ops']
 
         #For each operator, checks if they exist and store them in self object
         if 'mate' in ea_dict:
@@ -814,6 +808,19 @@ class Module:
             self.algorithm = self.bb.algorithm
         else:
             print('Please select a BlackBox module.')
+
+
+    @property
+    def init_data(self):
+        """Gets the init_data of self as a dictionary."""
+        return self.init_data_to_dict()
+
+
+    @property
+    def ea_ops(self):
+        """Gets the ea_ops of self as a dictionary."""
+        return self.ea_ops_to_dict()
+
 
     @property
     def final_prtf(self):
