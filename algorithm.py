@@ -3,6 +3,8 @@
 import time
 import random
 from collections import Counter
+
+import logging
 import numpy as np
 
 
@@ -32,6 +34,8 @@ def base_algorithm(obj):
               and final Pareto front.
     """
 
+    # Check if the object has the required attributes
+    aux_validate_object_attributes(obj)
 
     # Apply contraints and evaluate initial population
     obj.apply_constraints()
@@ -46,41 +50,27 @@ def base_algorithm(obj):
         # A new generation
         start = time.perf_counter()
 
-        # counter.update([tuple(sorted(i.asset_list)) for i in obj.pop])
-        # print(len(counter), sum(counter.values()), counter.most_common(1)[0][1])
+        counter.update([tuple(sorted(i.asset_list)) for i in obj.pop])
+        logging.info(
+            "Unique individuals: %d | Total: %d | Most common count: %d",
+            len(counter), sum(counter.values()),
+            counter.most_common(1)[0][1] if counter else 0)
 
-        # Select the offspring for the next generation
+        # Sort the population according to the fitness values
         offspring = obj.select(obj.pop, len(obj.pop))
 
-        # Clone the selected individuals, AS or PO
-        if not hasattr(obj, 'assets'):
-            offspring = obj.clone_population(offspring)
-
-        else:
-            pop_weights = [i.asset_weights for i in offspring]
-            offspring = list(obj.init_portfolio_individual
-                             (assets = obj.assets, asset_weights = i) for i in pop_weights)
+        # Clone the selected individuals
+        offspring = obj.clone_population(offspring)
 
         # Apply crossover on the offspring
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
-
-            # Cross two individuals with probability CXPB
-            if random.random() < obj.CXPB:
-                obj.mate(child1, child2)
-
-                # Delete fitness values of the children, to recalculate later
-                del child1.fitness.values
-                del child2.fitness.values
+            # Crossover two individuals
+            aux_apply_crossover(obj, child1, child2, random.random())
 
         # Apply mutation on the offspring
         for mutant in offspring:
-
-            # Mutate an individual with probability MUTPB
-            if random.random() < obj.MUTPB:
-                obj.mutate(mutant)
-
-                # Delete fitness values of the children, to recalculate later
-                del mutant.fitness.values
+            # Mutate an individual
+            aux_apply_mutation(obj, mutant, random.random())
 
         # Normalize the weights of all the portfolios
         _ = [ind.normalize_asset_weights() for ind in offspring]
@@ -100,22 +90,53 @@ def base_algorithm(obj):
         pareto_front = obj.find_non_dominant()
 
         # Gather all the fitnesses in one list and store the values
-        pvalues = np.array([i.fitness.values for i in pareto_front])
-        pareto_front = [pareto_front[i] for i in np.argsort(pvalues[:, 0])]
-        obj.pareto_fronts[g] = np.array([i.fitness.values for i in pareto_front])
+        pf_fitness = np.array([i.fitness.values for i in pareto_front])
+        pareto_front = [pareto_front[i] for i in np.argsort(pf_fitness[:, 0])]
+        obj.pareto_fronts[g] = pf_fitness
 
         generation_info = f"Generation {g + 1} || Length of Pareto: {len(pareto_front)}"
-        mean_info = f"Mean Return is {pvalues[:, 0].mean()} || Mean Variance is {pvalues[:, 1].mean()}"
+        mean_info = f"Mean Return: {pf_fitness[:, 0].mean()} || Mean Variance: {pf_fitness[:, 1].mean()}"
         print(f"{generation_info} || {mean_info}")
 
-        print(time.perf_counter() - start)
+        print(f'Time to run generation:{time.perf_counter() - start}')
 
 
-    print(
-        len(pareto_front[0].cache),
-        obj.pop_size,
-        (time.perf_counter() - start_algo) / obj.generations
-        )
+    print(pareto_front[0].get_cache_size(),
+        (time.perf_counter() - start_algo) / obj.generations)
 
     # Store the final pareto front
     obj.pareto_front = pareto_front
+
+
+def aux_validate_object_attributes(obj):
+    """Validates that the object passed has the required attributes."""
+
+    required_attrs = ['generations', 'CXPB', 'MUTPB', 'pop', 'pop_size']
+    for attr in required_attrs:
+        if not hasattr(obj, attr):
+            raise AttributeError(f"Object passed to base_algorithm must have '{attr}'")
+
+
+def aux_apply_crossover(obj, child1, child2, prob):
+    """
+    Apply crossover between two individuals with a given probability.
+    If the crossover occurs, the fitness values of the children are deleted to be recalculated later.
+    """
+
+    # Cross two individuals with probability CXPB
+    if prob < obj.CXPB:
+        obj.mate(child1, child2)
+
+        # Delete fitness values of the children, to recalculate later
+        del child1.fitness.values
+        del child2.fitness.values
+
+def aux_apply_mutation(obj, mutant, prob):
+    """Apply mutation on an individual with a given probability."""
+
+    # Mutate an individual with probability MUTPB
+    if prob < obj.MUTPB:
+        obj.mutate(mutant)
+
+        # Delete fitness values of the children, to recalculate later
+        del mutant.fitness.values
