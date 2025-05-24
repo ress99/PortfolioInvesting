@@ -1,6 +1,14 @@
+# pylint: skip-file
+
 from main_tab import Ui_MainWindow
 from backend import Backend_AS, Backend_PO
 from PyQt5 import QtCore, QtGui, QtWidgets
+import logging
+import config_logger # pylint: disable=unused-import
+
+
+logger = logging.getLogger(__name__)
+logger.info("Starting GUI App")
 
 class GUI_(QtWidgets.QMainWindow, Ui_MainWindow):
 
