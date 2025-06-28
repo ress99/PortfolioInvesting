@@ -27,6 +27,9 @@ class GUI_(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tab_PO.setupUi(self.tabPortOpt)
         self.tab_PO.setup_backend()
 
+        self.tab_AS.tab_PO = self.tab_PO
+        self.tab_PO.tab_AS = self.tab_AS
+
 
 class GUI(QtWidgets.QMainWindow, Ui_MainWindow):
 

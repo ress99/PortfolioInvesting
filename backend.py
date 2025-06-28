@@ -39,40 +39,39 @@ import index
 
 class Backend():
 
+    #Setup Methods for Tabs
     def setup_create_object(self):
+
         self.create_index_dropdown()
         self.connect_object_buttons()
         self.setup_line_inputs()
         self.radio_buttons()
 
+
     def setup_run_algorithm(self):
+
         self.add_func_names()
         self.connect_algo_buttons()
 
 
     def setup_choose_individual(self):
+
         self.populate_combo_box_choose_plot()
-        self.buttonPlot.clicked.connect(self.get_plot)
+        self.buttonPlot.clicked.connect(self.get_plot_choose_individual)
         self.checkBoxSimplified.stateChanged.connect(self.update_checkbox_prtfs)
         self.comboBoxChoosePlot.currentIndexChanged.connect(self.combo_choose_plot_changed)
         self.buttons_final_prtf()
-  
+
+    
+    def setup_test_portfolios(self):
+
+        self.populate_combo_box_choose_plot_test()
+        self.buttonPlotTest.clicked.connect(self.get_plot_test_prtf)
+        self.radio_test_buttons()
+        self.comboBoxChoosePlotTest.currentIndexChanged.connect(self.combo_choose_plot_test_changed)
+        self.connect_test_buttons()
 
 
-    def combo_choose_plot_changed(self):
-
-        text = self.comboBoxChoosePlot.currentText()
-        if text == "Multiple Objectives":
-            bool_ = False
-        else:
-            bool_ = True
-
-        self.spinMinX.setDisabled(bool_)
-        self.spinMaxX.setDisabled(bool_)
-        self.spinMinY.setDisabled(bool_)
-        self.spinMaxY.setDisabled(bool_)
-        self.checkBoxBoundaries.setDisabled(bool_)
-        
     def choose_final_prtf(self):
 
         if self.status == 2:
@@ -124,6 +123,7 @@ class Backend():
         elif button.text() == "Black-Box":
             self.evolutionary_algorithm_spins(True)
 
+
     def evolutionary_algorithm_spins(self, bool):
         
         self.bb_mode = bool
@@ -135,12 +135,30 @@ class Backend():
         self.spinGenerations.setDisabled(bool)
         self.spinPopSize.setDisabled(bool)
 
+
+    def radio_test_buttons(self): 
+
+        self.radioTestPop = QtWidgets.QRadioButton("Population")
+        self.radioTestPop.setChecked(True)
+        self.layoutTestPRTFs.addWidget(self.radioTestPop)
+        self.radioTestPop.toggled.connect(lambda: self.radio_button_clicked(self.radioTestPop))
+
+        self.radioTestPF = QtWidgets.QRadioButton("Pareto Front")
+        self.layoutTestPRTFs.addWidget(self.radioTestPF)
+        self.radioTestPF.toggled.connect(lambda: self.radio_button_clicked(self.radioTestPF))
+
+        self.radioTestFP = QtWidgets.QRadioButton("Final Portfolio")
+        self.layoutTestPRTFs.addWidget(self.radioTestFP)
+        self.radioTestFP.toggled.connect(lambda: self.radio_button_clicked(self.radioTestFP))
+
+
     def setup_line_inputs(self):
 
         regex = QtCore.QRegExp('[0-9,\s-]+')
         validator = QtGui.QRegExpValidator(regex)
         self.lineInputObjectives.setValidator(validator)
         self.lineInputObjectives.setPlaceholderText("CSV format")
+        self.lineInputObjectives.setText("1, -1")
         
         regex = QtCore.QRegExp('[a-zA-Z/\\\\.]+')
         validator = QtGui.QRegExpValidator(regex)
@@ -156,11 +174,47 @@ class Backend():
         self.comboBoxChoosePlot.addItem("All Portfolio Returns")
         self.comboBoxChoosePlot.addItem("Chosen Portfolio Assets")
 
+
+    def combo_choose_plot_changed(self):
+
+        text = self.comboBoxChoosePlot.currentText()
+        if text == "Multiple Objectives":
+            bool_ = False
+        else:
+            bool_ = True
+
+        self.spinMinX.setDisabled(bool_)
+        self.spinMaxX.setDisabled(bool_)
+        self.spinMinY.setDisabled(bool_)
+        self.spinMaxY.setDisabled(bool_)
+        self.checkBoxBoundaries.setDisabled(bool_)
+
+
+    def populate_combo_box_choose_plot_test(self):
+
+        self.comboBoxChoosePlotTest.addItem("Portfolio Returns")
+        self.comboBoxChoosePlotTest.addItem("Final Portfolio Assets")
+
+
+    def combo_choose_plot_test_changed(self):
+
+        text = self.comboBoxChoosePlotTest.currentText()
+        if text == "Portfolio Returns":
+            bool_ = False
+        else:
+            bool_ = True
+
+        self.radioTestPop.setDisabled(bool_)
+        self.radioTestPF.setDisabled(bool_)
+        self.radioTestFP.setDisabled(bool_)
+
+
     def backend_init_pop(self):
 
         if self.status == 1:
             self.obj.init_population()
             self.show_popup('info', 'Population Initialized')
+
 
     def add_func_names(self):
 
@@ -178,6 +232,7 @@ class Backend():
 
         algo_list = self.get_methods('algorithm.py')
         [self.comboBoxAlgo.addItem(i) for i in algo_list]
+
 
     def backend_register_methods(self):
 
@@ -203,11 +258,16 @@ class Backend():
                 self.show_popup('info', 'Algorithm Finished')
                 self.update_status()
 
+
     def connect_object_buttons(self):
         self.buttonCreateObject.clicked.connect(self.create_object)
         self.buttonImportObject.clicked.connect(self.import_object)
         self.buttonDeleteObject.clicked.connect(self.delete_object)
         self.buttonSaveObject.clicked.connect(self.save_object)
+
+
+    def connect_test_buttons(self):
+        self.buttonCreateTest.clicked.connect(self.create_test_object)
 
 
     def clear_list_prtfs(self):
@@ -245,31 +305,41 @@ class Backend():
             self.prtfs_on_display = [self.obj.pareto_front[i] for i in ids]
 
 
-    def get_plot(self):
+    def get_plot_choose_individual(self):
         
         if self.status >= 2:
 
             plt.close()
             self.clear_layout(self.layoutFig)
-            self.canvas = FigureCanvas(plt.figure())
-            self.toolbar = NavigationToolbar(self.canvas, self.verticalLayoutWidget_2)
-            self.layoutFig.addWidget(self.toolbar)
-            self.layoutFig.addWidget(self.canvas)
+            self.canvasChooseIndividual = FigureCanvas(plt.figure())
+            self.toolbarChooseIndividual = NavigationToolbar(self.canvasChooseIndividual, self.verticalLayoutWidget_2)
+            self.layoutFig.addWidget(self.toolbarChooseIndividual)
+            self.layoutFig.addWidget(self.canvasChooseIndividual)
             
-            ax = self.canvas.figure.add_subplot(111)
+            ax = self.canvasChooseIndividual.figure.add_subplot(111)
 
             idx = self.comboBoxChoosePlot.currentIndex()
             if idx == 0:
                 self.plot_MO(ax)
             elif idx == 1:
-                self.plot_prtf_returns(ax)
+                self.plot_portfolio_returns_chosen_tab(ax)
             elif idx == 2:
-                self.plot_asset_returns(ax)
 
-            self.canvas.draw()
+                if hasattr(self.obj, 'final_prtf'):
+                    prtf_to_plot = self.obj.final_prtf
+                    title = 'Final Portfolio Assets'
+                else:
+                    prtf_to_plot = self.get_selected_prtf()
+                    title = 'Selected Portfolio Assets'
+                    if not prtf_to_plot:
+                        prtf_to_plot = self.prtfs_on_display[0]
+                        title = 'First Portfolio Assets'
+                self.plot_asset_returns(ax, prtf_to_plot, title)
+
+            self.canvasChooseIndividual.draw()
 
 
-    def text_for_plot(self, text):
+    def text_for_plot_choose_individual(self, text):
 
         self.clear_layout(self.layoutFig)
 
@@ -281,21 +351,72 @@ class Backend():
         self.layoutFig.addWidget(self.labelPlot)
 
 
-    def plot_prtf_returns(self, ax):
+    def get_plot_test_prtf(self):
+
+        if hasattr(self, 'test_obj'):
+            plt.close()
+            self.clear_layout(self.layoutFigTest)
+            self.canvasTest = FigureCanvas(plt.figure())
+            self.toolbarTest = NavigationToolbar(self.canvasTest, self.verticalLayoutWidget_5)
+            self.layoutFigTest.addWidget(self.toolbarTest)
+            self.layoutFigTest.addWidget(self.canvasTest)
+            
+            ax = self.canvasTest.figure.add_subplot(111)
+
+            idx = self.comboBoxChoosePlotTest.currentIndex()
+            if idx == 0:
+                if self.radioTestPop.isChecked():
+                    self.plot_portfolio_returns_test_tab(ax, self.test_obj.pop)
+                elif self.radioTestPF.isChecked():
+                    self.plot_portfolio_returns_test_tab(ax, self.test_obj.pareto_front)
+                elif self.radioTestFP.isChecked():
+                    self.plot_portfolio_returns_test_tab(ax, [self.test_obj.final_prtf])
+                # self.plot_portfolio_returns_test_tab(ax, self.test_obj.pareto_front)
+            elif idx == 1:
+                self.plot_asset_returns(ax, self.test_obj.final_prtf, 'Final Portfolio Assets over Test Period')
+
+            self.canvasTest.draw()
+
+
+    def text_for_plot_test(self, text):
+
+        self.clear_layout(self.layoutFigTest)
+
+        self.labelPlotTest = QtWidgets.QLabel(text)
+        font = QtGui.QFont()
+        font.setPointSize(25)
+        self.labelPlotTest.setFont(font)
+        self.labelPlotTest.setAlignment(QtCore.Qt.AlignCenter)
+        self.layoutFigTest.addWidget(self.labelPlotTest)
+
+
+    def clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+            else:
+                sub_layout = item.layout()
+                if sub_layout is not None:
+                    self.clear_layout(sub_layout)
+
+
+    def plot_portfolio_returns_chosen_tab(self, ax):
 
         selected_ind = self.get_selected_prtf()
         final_prtf = None
         if hasattr(self.obj, 'final_prtf'):
             final_prtf = self.obj.final_prtf
         if selected_ind or final_prtf:
-            alpha = 0.75
+            alpha = 0.65
         else:
             alpha = 1
 
         for ind in self.obj.pareto_front:
 
             df_to_plot = ind.get_portfolio_returns_df()
-            ax.plot(df_to_plot.index, df_to_plot.values, alpha = alpha)
+            ax.plot(df_to_plot.index, df_to_plot.values, color = "#A3A3A3", alpha = alpha)
 
         if selected_ind:
             df_to_plot = selected_ind.get_portfolio_returns_df()
@@ -305,32 +426,64 @@ class Backend():
             df_to_plot = final_prtf.get_portfolio_returns_df()
             ax.plot(df_to_plot.index, df_to_plot.values, color = '#ff0000', linewidth=2.0, label = 'Final Portfolio')
 
-        ax.set_xlabel('X Axis Label')
-        ax.set_ylabel('Y Axis Label')
-        ax.set_title('Sine Wave Plot')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Returns')
+        ax.set_title('Portfolio Returns over Train')
         ax.grid(True)
+        # ax.tick_params(axis='x', rotation=20)
+        ax.figure.autofmt_xdate()
         if selected_ind or final_prtf:
             ax.legend()
 
         return   
 
-    def plot_asset_returns(self, ax):
 
-        selected_ind = self.get_selected_prtf()
-        if not selected_ind:
-            selected_ind = self.prtfs_on_display[0]
+    def plot_portfolio_returns_test_tab(self, ax, list_of_portfolios):
 
-        df = selected_ind.prtf_df.copy()
+        for ind in list_of_portfolios:
+
+            df_to_plot = ind.get_portfolio_returns_df()
+            ax.plot(df_to_plot.index, df_to_plot.values, color = "#A3A3A3", alpha = 0.65)
+
+        # for ind in self.test_obj.pareto_front:
+
+        #     df_to_plot = ind.get_portfolio_returns_df()
+        #     ax.plot(df_to_plot.index, df_to_plot.values, color = "#A3A3A3", alpha = 0.65)
+
+        test_final_prtf = self.test_obj.final_prtf
+        df_to_plot = test_final_prtf.get_portfolio_returns_df()
+        ax.plot(df_to_plot.index, df_to_plot.values, color = '#ff0000', linewidth=2.0, label = 'Final Portfolio')
+
+        index_list = test_final_prtf.index_objects
+        index_prtf = test_final_prtf.get_index_portfolio(index_list)
+        df_to_plot = index_prtf.get_portfolio_returns_df()
+        ax.plot(df_to_plot.index, df_to_plot.values, color = "#0035e2", linewidth=2.0, label = 'Index Portfolio')
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Returns')
+        ax.set_title('Portfolio Returns over Test Period')
+        ax.grid(True)
+        # ax.tick_params(axis='x', rotation=-20)
+        ax.figure.autofmt_xdate()
+        ax.legend()
+
+        return
+
+
+    def plot_asset_returns(self, ax, individual, title):
+
+        df = individual.prtf_df.copy()
 
         df.set_index('Date', inplace=True)
         df = df / df.iloc[0] * 100
         for col in df.columns:
             ax.plot(df.index, df[col], label=col)
 
-        ax.set_xlabel('X Axis Label')
-        ax.set_ylabel('Y Axis Label')
-        ax.set_title('Sine Wave Plot')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Returns')
+        ax.set_title(title)
         ax.grid(True)
+        ax.figure.autofmt_xdate()
         ax.legend()
 
     # def remove_bounds(self):
@@ -400,6 +553,35 @@ class Backend():
             QtWidgets.QMessageBox.warning(self, 'Invalid Input', 'Input must be integers separated by comma and space.')
 
 
+    def create_object(self):
+
+        if self.status > 0:
+
+            self.show_popup('warning', 'Cannot create a new object. Please delete the previous one first.')
+        
+        else:
+
+            self.buttonCreateObject.setEnabled(False)  # Disable the button
+            indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations, bb_filepath = self.get_selected_inputs()
+
+            if self.bb_mode:
+                try:
+                    self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, bb_path = bb_filepath)
+                    self.show_popup('info', 'Object created.')
+                except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError, ImportError) as e:
+                    self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
+
+            else:
+                try:
+                    self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations)
+                    self.show_popup('info', 'Object created.')
+                except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError) as e:
+                    self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
+
+            self.update_status()
+            self.buttonCreateObject.setEnabled(True)  # Re-enable the button
+
+
     def get_selected_inputs(self):
 
         prtf_size = self.spinPrtfSize.value()
@@ -416,33 +598,6 @@ class Backend():
 
         return indexes, prtf_size, objectives, start_date, end_date, CXPB, MUTPB, pop_size, generations, bb_filepath
 
-    def create_object(self):
-
-        if self.status > 0:
-
-            self.show_popup('warning', 'Cannot create a new object. Please delete the previous one first.')
-        
-        else:
-
-            self.buttonCreateObject.setEnabled(False)  # Disable the button
-            indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations, bb_filepath = self.get_selected_inputs()
-
-            if self.bb_mode:
-                try:
-                    self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, bb_path = bb_filepath)
-                    self.show_popup('info', 'Asset Selection created.')
-                except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError, ImportError) as e:
-                    self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
-
-            else:
-                try:
-                    self.obj = self.obj_class(indexes, prtf_size, objectives, start_date, end_date, MUT, CX, pop_size, generations)
-                    self.show_popup('info', 'Asset Selection created.')
-                except (TypeError, ValueError, FileNotFoundError, pickle.UnpicklingError) as e:
-                    self.show_popup('warning', f'Could not create Object. Error raised:\n{e}')
-
-            self.update_status()
-            self.buttonCreateObject.setEnabled(True)  # Re-enable the button
 
     def delete_object(self):
 
@@ -452,6 +607,7 @@ class Backend():
             self.update_status()
         else:
             self.show_popup('warning', f'There is no {self.module} object')
+
 
     def import_object(self):
 
@@ -476,7 +632,7 @@ class Backend():
                 self.show_popup('warning', 'Please select a valid File')
                 return
             
-            self.obj = self.obj_class(filename = filename)
+            self.obj = self.obj_class(filename = f"{filename}.pkl")
             self.update_status()
 
 
@@ -492,7 +648,6 @@ class Backend():
             return None, None
 
 
-
     def save_object(self):
 
         if self.status > 0:
@@ -503,6 +658,27 @@ class Backend():
         else:
             self.show_popup('warning', 'Cannot save an object. Please create one first.')
         return
+
+
+    def create_test_object(self):
+
+        if self.status >= 3:
+            years, months, days = self.get_test_interval_inputs()
+            self.test_obj = self.obj.create_test_asset_selection(years = years, months = months, days = days)
+            self.show_popup('info', 'Test Object Created.')
+            self.update_test_plot_text()
+        else:
+            self.show_popup('warning', 'Cannot create a test object. Please select a Final Portfolio.')
+
+
+    def get_test_interval_inputs(self):
+
+        years = self.spinTestYears.value()
+        months = self.spinTestMonths.value()
+        days = self.spinTestDays.value()
+
+        return years, months, days
+
 
     def populate_asset_selection_details(self):
         
@@ -539,6 +715,7 @@ class Backend():
             self.labelGenerationsInfo.setText("Generations:" + add_str)
             self.labelBBPathInfo.setText("Black-box Filepath:" + add_str)
 
+
     def create_index_dropdown(self):
 
         self.index_dropdown()
@@ -548,6 +725,10 @@ class Backend():
             item = QtWidgets.QListWidgetItem()
             item.setText(str(i))
             self.listIndexes.addItem(item)
+        
+        if self.listIndexes.count() > 0:
+            self.listIndexes.setCurrentRow(0)
+
 
     def index_dropdown(self):
 
@@ -627,17 +808,6 @@ class Backend():
         return result, indices
 
 
-    def clear_layout(self, layout):
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-            else:
-                sub_layout = item.layout()
-                if sub_layout is not None:
-                    self.clear_layout(sub_layout)
-    
     def disable_ea_algo_tab(self):
 
         self.comboBoxMate.setDisabled(self.bb_mode)
@@ -649,6 +819,7 @@ class Backend():
         self.buttonRegisterMethods.setDisabled(self.bb_mode)
 
         return
+
     
     def show_popup(self, message_type, message):
         """
@@ -712,6 +883,9 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
         self.setup_create_object()
         self.setup_run_algorithm()
         self.setup_choose_individual()
+        self.setup_test_portfolios()
+
+        self.setup_create_po_from_as()
 
         self.status = 0
         self.update_status()
@@ -740,6 +914,9 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
         if not (previous_state == 3 and self.status == 2):
             self.update_choose_individual_plot_text()
 
+        #If we have Test object
+        self.update_test_plot_text()
+
         #Unless the object had a final portfolio which was removed
         #Or we selected a final portfolio
         #Update the list of portfolios on display
@@ -752,19 +929,50 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
         self.disable_ea_algo_tab()
 
         return
+
+
+    def setup_create_po_from_as(self):
+
+        self.buttonCreatePO.clicked.connect(self.create_po_from_as)
     
+
+    def create_po_from_as(self):
+
+        if self.status != 3:
+            self.show_popup('warning', 'Not possible to create a Portfolio Optimization Object.\nPlease select a Final Portfolio first.')
+            return
+
+        if self.tab_PO.status == 0:
+            new_po = self.obj.create_portfolio_optimization()
+            self.tab_PO.obj = new_po
+            self.show_popup('info', 'Portfolio Optimization Object Created.')
+            
+            self.tab_PO.update_status()
+        else:
+            self.show_popup('warning', 'Portfolio Optimization Object already exists.')
+
 
     def update_choose_individual_plot_text(self):
 
         #If the object does not exist, show the text to create an object
         if self.status == 0:
-            self.text_for_plot("To Proceed:\nCreate an Asset Selection Object")
+            self.text_for_plot_choose_individual("To Proceed:\nCreate an Asset Selection Object")
         #If the object exists, show the text to run the algorithm
         elif self.status == 1:
-            self.text_for_plot("To Proceed:\nRun Algorithm")
+            self.text_for_plot_choose_individual("To Proceed:\nRun Algorithm")
         #If the algorithm was run, show the text to choose a plot
         elif self.status == 2:
-            self.text_for_plot('To Proceed:\nChoose a Plot')
+            self.text_for_plot_choose_individual('To Proceed:\nChoose a Plot')
+
+
+    def update_test_plot_text(self):
+
+        #If the object does not exist, show the text to create an object
+        if not hasattr(self, 'test_obj'):
+            self.text_for_plot_test("To Proceed:\nCreate a Test Object")
+        #Choose a plot
+        else:
+            self.text_for_plot_test('To Proceed:\nLoad a Plot')
 
 
     def connect_algo_buttons(self):
@@ -801,12 +1009,6 @@ class Backend_PO(Backend, Ui_PO):
                     self.status = 3
         else:
             self.status = 0
-        #         else:
-        #             self.text_for_plot('Choose a Plot')
-        #     else:
-        #         self.text_for_plot("Run Algorithm")
-        # else:
-        #     self.text_for_plot("Create an Asset Selection\n Object")
 
         if not (previous_state == 3 and self.status == 2):
             self.update_choose_individual_plot_text()
@@ -822,11 +1024,11 @@ class Backend_PO(Backend, Ui_PO):
     def update_choose_individual_plot_text(self):
 
         if self.status == 0:
-            self.text_for_plot("Create a Portfolio Optimization\n Object")
+            self.text_for_plot_choose_individual("Create a Portfolio Optimization\n Object")
             if self.status == 1:
-                self.text_for_plot("Run Algorithm")
+                self.text_for_plot_choose_individual("Run Algorithm")
                 if self.status == 2:
-                    self.text_for_plot('Choose a Plot')
+                    self.text_for_plot_choose_individual('Choose a Plot')
 
 
     def connect_algo_buttons(self):
