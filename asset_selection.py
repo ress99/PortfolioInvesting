@@ -156,6 +156,12 @@ class AssetSelection(Module):
             AssetSelection: A new AssetSelection object with updated dates
             and copied population, pareto front, and final portfolio if present.
         """
+
+        #Check if the original object has a final portfolio.
+        #If not, does not make sense to create a new test object
+        if not hasattr(self, 'final_prtf'):
+            return None
+
         #If no time period is specified, default to 1 year
         if years is None and months is None and days is None:
             years = 1
