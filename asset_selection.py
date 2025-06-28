@@ -1,28 +1,19 @@
 """Asset Selection class with implementation of parent's methods and attributes"""
 
+import logging
 
 import config as c
 from module import Module
 import data_op as op
 from portfolio_optimization import PortfolioOptimization
 
-# import logging
-# import time
-# import datetime
-# import random
-# import data_op as op
-# import pandas as pd
-# import numpy as np
-# import talib as ta
-# import pickle
-# from functools import partial
-# import os
-# import json
-# import matplotlib.pyplot as plt
-# import plotly.graph_objects as go
-
-
+# Disable pylint warning for callint super() in __init__
 # pylint: disable=super-init-not-called
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+
 class AssetSelection(Module):
     """ Class with implementation of Module methods and attributes"""
 
