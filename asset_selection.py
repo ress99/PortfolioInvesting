@@ -137,6 +137,11 @@ class AssetSelection(Module):
         #Create a new PortfolioOptimization object with initialization data
         new_po = PortfolioOptimization(init_dict = init_data)
 
+        #In case the original AssetSelection object has a final portfolio
+        #Use its assets to set the assets of the new PortfolioOptimization object
+        if hasattr(self, 'final_prtf'):
+            new_po.set_assets(assets = self.final_prtf.asset_list)
+
         #Return the new PortfolioOptimization object
         return new_po
 
@@ -181,13 +186,15 @@ class AssetSelection(Module):
                     for ind in self.pop]
 
         #If the original AssetSelection object has a pareto front, copy it to the new object
+        #References the portfolio in the new Asset Selection object
         if hasattr(self, 'pareto_front'):
             #Get the indexes of the original pareto front individuals in the original population
             old_pareto_indexes = [self.pop.index(ind) for ind in self.pareto_front]
-            #Get the pareto individuals according to theirindexes in the old population
+            #Get the pareto individuals according to their indexes in the old population
             new_as_sel.pareto_front = [new_as_sel.pop[idx] for idx in old_pareto_indexes]
 
         #If the original AssetSelection object has a final portfolio, copy it to the new object
+        #References the portfolio in the new Asset Selection object
         if hasattr(self, 'final_prtf'):
             #Get the index of the original final portfolio in the original population
             old_final_prtf_index = self.pop.index(self.final_prtf)
