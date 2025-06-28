@@ -10,7 +10,7 @@ import numpy as np
 
 counter = Counter()
 
-def base_algorithm(obj):
+def base_algorithm(obj, print_info=True):
     """
     Implementation of a base Genetic Algorithm.
 
@@ -89,20 +89,23 @@ def base_algorithm(obj):
         # Find the pareto front of the population
         pareto_front = obj.find_non_dominant()
 
-        # Gather all the fitnesses in one list and store the values
+        # Gather all the fitnesses in one sorted list and store the values
+        unsorted_fitness = np.array([i.fitness.values for i in pareto_front])
+        pareto_front = [pareto_front[i] for i in np.argsort(unsorted_fitness[:, 0])]
         pf_fitness = np.array([i.fitness.values for i in pareto_front])
-        pareto_front = [pareto_front[i] for i in np.argsort(pf_fitness[:, 0])]
         obj.pareto_fronts[g] = pf_fitness
 
         generation_info = f"Generation {g + 1} || Length of Pareto: {len(pareto_front)}"
-        mean_info = f"Mean Return: {pf_fitness[:, 0].mean()} || Mean Variance: {pf_fitness[:, 1].mean()}"
-        print(f"{generation_info} || {mean_info}")
+        mean_return = f"Mean Return: {np.round(pf_fitness[:, 0].mean(), 2)}"
+        mean_var = f"Mean Variance: {np.round(pf_fitness[:, 1].mean(), 2)}"
 
-        print(f'Time to run generation:{time.perf_counter() - start}')
+        if print_info:
+            print(f"{generation_info} || {mean_return} ||{mean_var}")
+            print(f'Time to run generation:{time.perf_counter() - start}')
 
-
-    print(pareto_front[0].get_cache_size(),
-        (time.perf_counter() - start_algo) / obj.generations)
+    if print_info:
+        print(pareto_front[0].get_cache_size(),
+            (time.perf_counter() - start_algo) / obj.generations)
 
     # Store the final pareto front
     obj.pareto_front = pareto_front
@@ -120,7 +123,7 @@ def aux_validate_object_attributes(obj):
 def aux_apply_crossover(obj, child1, child2, prob):
     """
     Apply crossover between two individuals with a given probability.
-    If the crossover occurs, the fitness values of the children are deleted to be recalculated later.
+    If the crossover occurs, the fitness values of the children are deleted to be recalculated.
     """
 
     # Cross two individuals with probability CXPB
@@ -130,6 +133,7 @@ def aux_apply_crossover(obj, child1, child2, prob):
         # Delete fitness values of the children, to recalculate later
         del child1.fitness.values
         del child2.fitness.values
+
 
 def aux_apply_mutation(obj, mutant, prob):
     """Apply mutation on an individual with a given probability."""
