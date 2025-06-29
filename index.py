@@ -79,7 +79,7 @@ class SP500(Index):
         Reads all assets from index in database and returns the list.
         """
 
-        path = op.get_path('SP500', filename = self.asset_list_csv_file + c.filetype)
+        path = op.get_path('SP500', filename = self.asset_list_csv_file)
         tickers_df = pd.read_csv(path)
         tickers = tickers_df['S&P500'].tolist()
 
@@ -162,7 +162,7 @@ class DAX40(Index):
         Reads all assets from index in database and returns the list.
         """
 
-        path = op.get_path(self.name, filename = self.name + c.filetype)
+        path = op.get_path(self.name, filename = self.asset_list_csv_file)
         assets_df = pd.read_csv(path)
         assets = assets_df[self.name].tolist()
 
