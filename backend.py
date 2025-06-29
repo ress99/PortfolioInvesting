@@ -313,7 +313,8 @@ class Backend():
             plt.close()
             self.clear_layout(self.layoutFig)
             self.canvasChooseIndividual = FigureCanvas(plt.figure())
-            self.toolbarChooseIndividual = NavigationToolbar(self.canvasChooseIndividual, self.verticalLayoutWidget_2)
+            # self.toolbarChooseIndividual = NavigationToolbar(self.canvasChooseIndividual, self.verticalLayoutWidget_2)
+            self.toolbarChooseIndividual = NavigationToolbar(self.canvasChooseIndividual, self.plotWidgetContainer)
             self.layoutFig.addWidget(self.toolbarChooseIndividual)
             self.layoutFig.addWidget(self.canvasChooseIndividual)
             
@@ -358,7 +359,7 @@ class Backend():
             plt.close()
             self.clear_layout(self.layoutFigTest)
             self.canvasTest = FigureCanvas(plt.figure())
-            self.toolbarTest = NavigationToolbar(self.canvasTest, self.verticalLayoutWidget_5)
+            self.toolbarTest = NavigationToolbar(self.canvasTest, self.plotWidgetContestContainer)
             self.layoutFigTest.addWidget(self.toolbarTest)
             self.layoutFigTest.addWidget(self.canvasTest)
             
@@ -1031,14 +1032,27 @@ class Backend_PO(Backend, Ui_PO):
 
         return
     
+    # def update_choose_individual_plot_text(self):
+
+    #     if self.status == 0:
+    #         self.text_for_plot_choose_individual("Create a Portfolio Optimization\n Object")
+    #         if self.status == 1:
+    #             self.text_for_plot_choose_individual("Run Algorithm")
+    #             if self.status == 2:
+    #                 self.text_for_plot_choose_individual('Choose a Plot')
+
+
     def update_choose_individual_plot_text(self):
 
+        #If the object does not exist, show the text to create an object
         if self.status == 0:
-            self.text_for_plot_choose_individual("Create a Portfolio Optimization\n Object")
-            if self.status == 1:
-                self.text_for_plot_choose_individual("Run Algorithm")
-                if self.status == 2:
-                    self.text_for_plot_choose_individual('Choose a Plot')
+            self.text_for_plot_choose_individual("To Proceed:\nCreate a Portfolio Optimization Object")
+        #If the object exists, show the text to run the algorithm
+        elif self.status == 1:
+            self.text_for_plot_choose_individual("To Proceed:\nRun Algorithm")
+        #If the algorithm was run, show the text to choose a plot
+        elif self.status == 2:
+            self.text_for_plot_choose_individual('To Proceed:\nChoose a Plot')
 
 
     def connect_algo_buttons(self):
