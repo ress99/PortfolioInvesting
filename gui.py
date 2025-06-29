@@ -6,6 +6,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import logging
 import config_logger # pylint: disable=unused-import
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 logger = logging.getLogger(__name__)
 logger.info("Starting GUI App")
