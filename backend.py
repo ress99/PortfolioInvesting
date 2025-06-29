@@ -31,6 +31,7 @@ from tab_po import Ui_PO
 
 import config as c
 import index
+from data_op import get_path
 # from deap import base
 # from deap import creator
 # from deap import tools
@@ -733,10 +734,19 @@ class Backend():
     def index_dropdown(self):
 
         all_classes = [(name, cls) for name, cls in inspect.getmembers(index) if inspect.isclass(cls) and cls.__module__ == index.__name__ and name != "Index"]
-        self.index_dict = {i[0]: i[1]() for i in all_classes}
+        
+        # Check if each class has a corresponding file in the Data folder
+        available_classes = []
+        for name, cls in all_classes:
+            file_path = get_path(cls.name)
+            if os.path.exists(file_path):
+                available_classes.append((name, cls))
+
+        self.index_dict = {i[0]: i[1]() for i in available_classes}
         return
 
-    #Substitute in final version
+
+    #Not in current use
     def create_ss_layout(self):
 
         self.verticalLayoutWidget = QtWidgets.QWidget(self.tabRunAlgorithm)

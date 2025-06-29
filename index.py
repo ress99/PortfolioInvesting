@@ -64,7 +64,7 @@ class SP500(Index):
 
     name = 'SP500'
     name_asset_index = '^GSPC'
-
+    asset_list_csv_file = 'sp500tickers.csv'
 
     def __init__(self):
 
@@ -79,7 +79,7 @@ class SP500(Index):
         Reads all assets from index in database and returns the list.
         """
 
-        path = op.get_path('SP500', filename = 'sp500tickers' + c.filetype)
+        path = op.get_path('SP500', filename = self.asset_list_csv_file + c.filetype)
         tickers_df = pd.read_csv(path)
         tickers = tickers_df['S&P500'].tolist()
 
@@ -146,6 +146,7 @@ class DAX40(Index):
 
     name = 'DAX40'
     name_asset_index = '^GDAXI'
+    asset_list_csv_file = 'DAX40.csv'
 
 
     def __init__(self):
