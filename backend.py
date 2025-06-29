@@ -738,7 +738,7 @@ class Backend():
         # Check if each class has a corresponding file in the Data folder
         available_classes = []
         for name, cls in all_classes:
-            file_path = get_path(cls.name)
+            file_path = get_path(name, filename = cls.asset_list_csv_file)
             if os.path.exists(file_path):
                 available_classes.append((name, cls))
 
