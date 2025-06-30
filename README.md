@@ -83,5 +83,4 @@ deactivate
 
 This work is done as a Master Thesis at Instituto Superior Técnico.
 
-
-python -m cProfile -s cumtime AssetSelection.py
+Project from Miguel Ressurreição
