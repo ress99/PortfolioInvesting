@@ -118,7 +118,7 @@ class Module:
             prtf.normalize_asset_weights()
 
         #Apply random weights if specified
-        if random_weights:
+        elif random_weights:
             asset_weights = [random.random() for _ in range(len(prtf.asset_weights))]
             prtf.asset_weights = asset_weights
             prtf.normalize_asset_weights()
@@ -948,6 +948,9 @@ class Module:
 
     def plot_min_max(self):
 
+        if not hasattr(self, 'pareto_fronts'):
+            return
+
         min_max_return = [[i[0, 0], np.percentile(i[:, 0], 25), np.mean(i[:, 0]), np.percentile(i[:, 0], 75), i[-1, 0]] for i in self.pareto_fronts]
         min_max_risk = [[i[0, 1], np.percentile(i[:, 1], 25), np.mean(i[:, 1]), np.percentile(i[:, 1], 75), i[-1, 1]] for i in self.pareto_fronts]
 
@@ -1063,7 +1066,10 @@ class Module:
         title, xlabel, ylabel = self.standard_labels(title, xlabel, ylabel)
 
         if arr_list is None:
-            arr_list = self.pareto_fronts
+            if hasattr(self, 'pareto_fronts'):
+                arr_list = self.pareto_fronts
+            else: 
+                return
 
         plt.figure()
         label = 'All Pareto Fronts'
@@ -1212,5 +1218,76 @@ class Module:
         plt.xlabel('Return')
         plt.ylabel('Risk')
         plt.grid()
+        plt.legend()
+        plt.show()
+
+
+    def plot_pareto_and_final_returns(self, train = True):
+        plt.figure(figsize=(10, 6))
+
+        alpha = 0.65 if hasattr(self, 'final_prtf') and self.final_prtf else 1
+
+        first = True
+        for ind in self.pareto_front:
+            df_to_plot = ind.get_portfolio_returns_df()
+            if first:
+                plt.plot(df_to_plot.index, df_to_plot.values, color="#A3A3A3", alpha=alpha, label="Pareto Front Portfolios")
+                first = False
+            else:
+                plt.plot(df_to_plot.index, df_to_plot.values, color="#A3A3A3", alpha=alpha)
+
+        # Plot the final portfolio if it exists
+        if hasattr(self, 'final_prtf') and self.final_prtf:
+            df_to_plot = self.final_prtf.get_portfolio_returns_df()
+            plt.plot(df_to_plot.index, df_to_plot.values, color='#ff0000', linewidth=2.0, label='Final Portfolio')
+
+
+        # Plot the index portfolio
+        if hasattr(self, 'final_prtf') and self.final_prtf:
+            index_list = self.final_prtf.index_objects
+            index_prtf = self.final_prtf.get_index_portfolio(index_list)
+            df_to_plot = index_prtf.get_portfolio_returns_df()
+            plt.plot(df_to_plot.index, df_to_plot.values, color="#0035e2", linewidth=2.0, label='Index Portfolio')
+
+
+        if train:
+            title = 'Portfolio Returns over Train'
+        else:
+            title = 'Portfolio Returns over Test'
+
+        plt.xlabel('Time')
+        plt.ylabel('Returns')
+        plt.title(title)
+        plt.grid(True)
+        plt.gcf().autofmt_xdate()
+        if hasattr(self, 'final_prtf') and self.final_prtf:
+            plt.legend()
+        plt.show()
+
+
+    def plot_asset_returns(self, title=None):
+        """
+        Plots the returns of each asset in the final_prtf
+
+        Args:
+            title (str, optional): The title for the plot.
+        """
+
+        if not (hasattr(self, 'final_prtf') and self.final_prtf):
+            return
+
+        df = self.final_prtf.prtf_df.copy()
+        df.set_index('Date', inplace=True)
+        df = df / df.iloc[0] * 100  # Normalize to 100 at start
+
+        plt.figure(figsize=(10, 6))
+        for col in df.columns:
+            plt.plot(df.index, df[col], label=col)
+
+        plt.xlabel('Time')
+        plt.ylabel('Returns')
+        plt.title(title if title else 'Final Portfolio Asset Returns')
+        plt.grid(True)
+        plt.gcf().autofmt_xdate()
         plt.legend()
         plt.show()
