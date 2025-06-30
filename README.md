@@ -52,11 +52,18 @@ poetry env info --path
 <path>\Scripts\activate
 ```
 
-3. Run the script:
+3. Run one of the available scripts:
+
+- To run the GUI interface:
 
 ```bash
-python main.py
 python gui.py
+```
+
+- To run a CLI demo:
+
+```bash
+python demo_test.py
 ```
 
 4. Deactivate when done:
