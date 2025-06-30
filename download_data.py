@@ -3,13 +3,11 @@ import requests
 import yfinance as yf
 import datetime as dt
 import pandas as pd
-import numpy as np
 import os
 import data_op as op
 import time
 import config as c
 import logging
-from index import SP500, DAX40
 
 
 from datetime import datetime, date
@@ -23,11 +21,11 @@ logger = logging.getLogger(__name__)
 #####
 def data_index_to_date(data):
 
-        #data.index = data.index.tz_localize(None)           #Remove timezone from index
-        data.reset_index(inplace = True)                    #Reset index to number of rows
-        data['Date'] = data['Date'].dt.date                 #Convert 'Date' column from pandas datetime to datetime.date
-        
-        return data
+    #data.index = data.index.tz_localize(None)           #Remove timezone from index
+    data.reset_index(inplace = True)                    #Reset index to number of rows
+    data['Date'] = data['Date'].dt.date                 #Convert 'Date' column from pandas datetime to datetime.date
+    
+    return data
 
 
 
@@ -68,7 +66,7 @@ def update_historical_data(index, assets = None):
         else:   
             start = time.time()                                                            #In case the file does not exists
             data = yf.download(tic, period = 'max', interval = '1d')        #Download data from yfinance
-            data = data_index_to_date(data)                                 
+            data = data_index_to_date(data)
             data = data.iloc[:-1]                                           #Remove last row - may not be a complete day     
             data.to_csv(to_save_filename, index = False)                  #Save to csv
             end = time.time()
@@ -150,10 +148,11 @@ def get_financials(index, assets = None):
 
 if __name__ == '__main__':
 
+    print("Uncomment to update Data")
     # sp = SP500()
     # update_historical_data(sp)
     # get_financials(sp)
 
-    dax = DAX40()
-    update_historical_data(dax, ['^GDAXI'])
+    # dax = DAX40()
+    # update_historical_data(dax, ['^GDAXI'])
     # get_financials(dax)
