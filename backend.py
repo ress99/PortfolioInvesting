@@ -313,7 +313,6 @@ class Backend():
             plt.close()
             self.clear_layout(self.layoutFig)
             self.canvasChooseIndividual = FigureCanvas(plt.figure())
-            # self.toolbarChooseIndividual = NavigationToolbar(self.canvasChooseIndividual, self.verticalLayoutWidget_2)
             self.toolbarChooseIndividual = NavigationToolbar(self.canvasChooseIndividual, self.plotWidgetContainer)
             self.layoutFig.addWidget(self.toolbarChooseIndividual)
             self.layoutFig.addWidget(self.canvasChooseIndividual)
