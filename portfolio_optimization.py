@@ -204,7 +204,7 @@ class PortfolioOptimization(Module):
         return po
 
 
-    def create_test_portfolio_optimization(self, years = None, months = None, days = None):
+    def create_test_object(self, years = None, months = None, days = None):
         """
         Creates a new PO object for testing with a shifted time period.
 

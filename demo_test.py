@@ -64,7 +64,7 @@ def run_asset_selection():
 def test_asset_selection(as_sel):
 
     
-    new_as_sel = as_sel.create_test_asset_selection(months = 6)
+    new_as_sel = as_sel.create_test_object(months = 6)
 
     new_as_sel.plot_asset_returns()
     new_as_sel.plot_pareto_and_final_returns(train = False)
@@ -98,7 +98,7 @@ def run_portfolio_optimization(as_sel):
 
 def test_portfolio_optimization(po):
 
-    new_as_sel = po.create_test_portfolio_optimization(months = 6)
+    new_as_sel = po.create_test_object(months = 6)
 
     new_as_sel.plot_asset_returns()
     new_as_sel.plot_pareto_and_final_returns(train = False)

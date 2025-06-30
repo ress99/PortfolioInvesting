@@ -137,7 +137,7 @@ class AssetSelection(Module):
         return new_po
 
 
-    def create_test_asset_selection(self, years = None, months = None, days = None):
+    def create_test_object(self, years = None, months = None, days = None):
         """
         Creates a new AssetSelection object for testing with a shifted time period.
 
