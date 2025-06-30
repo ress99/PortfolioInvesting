@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'tab_as4.ui'
+# Form implementation generated from reading ui file 'tab_as.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.9
 #
@@ -705,7 +705,7 @@ class Ui_AS(object):
         self.verticalLayout_34.addWidget(self.plotWidgetContestContainer)
         spacerItem17 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_34.addItem(spacerItem17)
-        self.verticalLayout_34.setStretch(0, 5)
+        self.verticalLayout_34.setStretch(0, 6)
         self.verticalLayout_34.setStretch(1, 1)
         self.gridLayout_10.addLayout(self.verticalLayout_34, 0, 0, 1, 1)
         self.verticalLayout_32 = QtWidgets.QVBoxLayout()
@@ -837,7 +837,7 @@ class Ui_AS(object):
         self.gridLayout_7.addLayout(self.verticalLayout_7, 0, 0, 1, 1)
 
         self.retranslateUi(AS)
-        self.tabAS.setCurrentIndex(3)
+        self.tabAS.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(AS)
 
     def retranslateUi(self, AS):

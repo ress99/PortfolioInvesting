@@ -677,7 +677,7 @@ class Ui_PO(object):
         self.verticalLayout_34.addWidget(self.plotWidgetContestContainer)
         spacerItem18 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_34.addItem(spacerItem18)
-        self.verticalLayout_34.setStretch(0, 4)
+        self.verticalLayout_34.setStretch(0, 6)
         self.verticalLayout_34.setStretch(1, 1)
         self.gridLayout_7.addLayout(self.verticalLayout_34, 0, 0, 1, 1)
         self.verticalLayout_32 = QtWidgets.QVBoxLayout()
@@ -809,7 +809,7 @@ class Ui_PO(object):
         self.verticalLayout_8.addLayout(self.verticalLayout_7)
 
         self.retranslateUi(PO)
-        self.tabAS.setCurrentIndex(2)
+        self.tabAS.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(PO)
 
     def retranslateUi(self, PO):
