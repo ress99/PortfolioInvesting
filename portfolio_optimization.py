@@ -109,7 +109,7 @@ class PortfolioOptimization(Module):
             self.assets = assets
         #If a pickle filename is provided, extract the assets from the pickle file
         elif pkl_filename:
-            pickle_data = self.get_pickle_raw_data(pkl_filename, folder = c.as_folder)
+            pickle_data = self.get_pickle_raw_data(pkl_filename + '.pkl', folder = c.as_folder)
             self.assets = self.get_assets_from_pickle(pickle_data)
         #If a JSON filename is provided, extract the assets from the JSON file
         elif json_filename:
@@ -195,11 +195,11 @@ class PortfolioOptimization(Module):
         #Create new Asset Selection object with initialization attributes
         po = PortfolioOptimization(indexes, prtf_size, objectives, start_date, end_date,
                               CXPB, MUTPB, pop_size, generations, bb_path)
-        
-        # #Store evolutionary operators on Asset Selection object
-        # po.ea_ops_from_dict(pickle_data)
-        # #Store additional attributes on self object
-        # po.set_attributes_from_pickle_dict(self.attributes_list, pickle_data)
+
+        #Store evolutionary operators on Asset Selection object
+        po.ea_ops_from_dict(pickle_data)
+        #Store additional attributes on self object
+        po.set_attributes_from_pickle_dict(self.attributes_list, pickle_data)
 
         return po
 
