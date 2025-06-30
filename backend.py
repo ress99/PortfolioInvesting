@@ -213,8 +213,11 @@ class Backend():
     def backend_init_pop(self):
 
         if self.status == 1:
-            self.obj.init_population()
-            self.show_popup('info', 'Population Initialized')
+            try:
+                self.obj.init_population()
+                self.show_popup('info', 'Population Initialized')
+            except ValueError as e:
+                self.show_popup('warning', f'Population could not be initialized:\n{e}')
 
 
     def add_func_names(self):
@@ -524,9 +527,9 @@ class Backend():
             ax.plot(prtf_point[0], prtf_point[1], color = 'red', marker = 'o', label = 'Final Portfolio')
 
 
-        ax.set_xlabel('X Axis Label')
-        ax.set_ylabel('Y Axis Label')
-        ax.set_title('Sine Wave Plot')
+        ax.set_xlabel('Portfolio Return')
+        ax.set_ylabel('Portfolio Risk')
+        ax.set_title('Multi-Objective Space Plot')
         ax.legend()
         ax.grid(True)
 
@@ -665,7 +668,7 @@ class Backend():
 
         if self.status >= 3:
             years, months, days = self.get_test_interval_inputs()
-            self.test_obj = self.obj.create_test_asset_selection(years = years, months = months, days = days)
+            self.test_obj = self.obj.create_test_object(years = years, months = months, days = days)
             self.show_popup('info', 'Test Object Created.')
             self.update_test_plot_text()
         else:
@@ -715,6 +718,9 @@ class Backend():
             self.labelPopSizeInfo.setText("Population Size:" + add_str)
             self.labelGenerationsInfo.setText("Generations:" + add_str)
             self.labelBBPathInfo.setText("Black-box Filepath:" + add_str)
+
+            if hasattr(self, 'labelAssetsInfo'):
+                self.labelAssetsInfo.setText("Assets:" + add_str)
 
 
     def create_index_dropdown(self):
@@ -876,6 +882,15 @@ class Backend():
                 return filename
         return None
 
+    def update_test_plot_text(self):
+
+        #If the object does not exist, show the text to create an object
+        if not hasattr(self, 'test_obj'):
+            self.text_for_plot_test("To Proceed:\nCreate a Test Object")
+        #Choose a plot
+        else:
+            self.text_for_plot_test('To Proceed:\nLoad a Plot')
+
 class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
 
     module = 'Asset Selection'
@@ -975,16 +990,6 @@ class Backend_AS(QtWidgets.QWidget, Backend, Ui_AS):
             self.text_for_plot_choose_individual('To Proceed:\nChoose a Plot')
 
 
-    def update_test_plot_text(self):
-
-        #If the object does not exist, show the text to create an object
-        if not hasattr(self, 'test_obj'):
-            self.text_for_plot_test("To Proceed:\nCreate a Test Object")
-        #Choose a plot
-        else:
-            self.text_for_plot_test('To Proceed:\nLoad a Plot')
-
-
     def connect_algo_buttons(self):
 
         self.buttonInitPop.clicked.connect(self.backend_init_pop)
@@ -1003,6 +1008,7 @@ class Backend_PO(Backend, Ui_PO):
         self.setup_create_object()
         self.setup_run_algorithm()
         self.setup_choose_individual()
+        self.setup_test_portfolios()
 
         self.status = 0
         self.update_status()
@@ -1025,6 +1031,10 @@ class Backend_PO(Backend, Ui_PO):
 
         if not ((previous_state == 3 and self.status == 2) or (previous_state == 2 and self.status == 3)):
             self.update_checkbox_prtfs() 
+
+
+        #If we have Test object
+        self.update_test_plot_text()
 
         self.populate_asset_selection_details()
         self.disable_ea_algo_tab()
@@ -1076,13 +1086,22 @@ class Backend_PO(Backend, Ui_PO):
                 
             filename, _ = self.open_file_dialog(dir, extension)
             if filename is None:
-                print('Please choose a valid file.')
+                self.show_popup('warning', 'Please select a valid File')
                 return
             
             if 'pkl' in extension:
                 self.obj.set_assets(pkl_filename = filename)
             if 'json' in extension:
                 self.obj.set_assets(json_filename = filename)
+
+            # If everything goes well, update the label with the asset_list of final_prtf
+            if hasattr(self.obj, 'assets'):
+                self.labelAssetsInfo.setText("Assets: " + str(self.obj.assets[:3]) + "...")
+            else:
+                self.labelAssetsInfo.setText("Assets: -")
+
+        else:
+            self.show_popup('warning', 'Cannot import assets. Please create a Portfolio Optimization Object first.')
 
 
 
